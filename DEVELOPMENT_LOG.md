@@ -273,6 +273,21 @@ cd assets/连连看例子
 
 修复后 `HBoxContainer` 恢复为正常高度（约 55px），文字标签显示正常，棋盘区域重新可见。
 
+### 14. 初始化 Git 仓库并推送至 GitHub
+
+**时间**：2026-06-30  
+**涉及文件**：`.gitignore`
+
+**说明**：应要求将项目代码推送到 GitHub 仓库 `https://github.com/eyre516/-linkit.git`。
+
+**操作**：
+- 初始化本地 Git 仓库：`git init`
+- 添加远程仓库：`origin https://github.com/eyre516/-linkit.git`
+- 首次提交并推送主分支
+- 修复 `.gitignore`：首次提交时不慎把 `.venv/`（Python 虚拟环境，包含 numpy、PIL 等大量依赖）一起提交；随后将其从 Git 索引中移除，并在 `.gitignore` 中新增 `.venv/`，避免虚拟环境被版本控制
+
+最终仓库中不包含 `.godot/`、`/android/`、`.venv/` 等应由本地生成或重建的目录。
+
 ---
 
 ## 待后续考虑
