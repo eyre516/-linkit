@@ -1,0 +1,34 @@
+; cell.tscn — 格子场景：PanelContainer + TextureRect，用于显示单个连连看图标
+
+[gd_scene load_steps=3 format=3 uid="uid://bm62ipt0ofqm7"]
+
+[ext_resource type="Script" uid="uid://bx55232lcd1sp" path="res://cell.gd" id="2_gwrgs"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gwrgs"]
+bg_color = Color(1, 0.95, 0.7, 1)
+border_width_left = 0
+border_width_top = 0
+border_width_right = 0
+border_width_bottom = 0
+
+[node name="Cell" type="PanelContainer"]
+custom_minimum_size = Vector2(48, 48)
+anchors_preset = -1
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_gwrgs")
+script = ExtResource("2_gwrgs")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 2
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 2
+theme_override_constants/margin_bottom = 2
+
+[node name="TextureRect" type="TextureRect" parent="MarginContainer"]
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[connection signal="gui_input" from="." to="." method="_on_gui_input"]

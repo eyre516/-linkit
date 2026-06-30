@@ -1,0 +1,578 @@
+[gd_scene load_steps=9 format=3 uid="uid://clervudyy6xv"]
+
+[ext_resource type="Script" uid="uid://yey3gxhknoih" path="res://game.gd" id="1_feb5d"]
+[ext_resource type="PackedScene" uid="uid://bm62ipt0ofqm7" path="res://cell.tscn" id="2_e2o6t"]
+
+[sub_resource type="Theme" id="Theme_main"]
+default_font_size = 34
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_timer_bg"]
+bg_color = Color(0.2, 0.2, 0.2, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_timer_fill"]
+bg_color = Color(1, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_score"]
+font_size = 34
+font_color = Color(1, 0, 0, 1)
+
+[sub_resource type="SystemFont" id="SystemFont_pause"]
+font_weight = 800
+
+[sub_resource type="LabelSettings" id="LabelSettings_pause"]
+font = SubResource("SystemFont_pause")
+font_size = 140
+font_color = Color(0, 0.35, 0.1, 0.9)
+
+[node name="Game" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_feb5d")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_main")
+
+[node name="MenuBar" type="HBoxContainer" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_vertical = 0
+
+[node name="GameMenu" type="MenuButton" parent="VBoxContainer/MenuBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "游戏"
+flat = false
+
+[node name="OptionsMenu" type="MenuButton" parent="VBoxContainer/MenuBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "选项"
+flat = false
+
+[node name="HelpMenu" type="MenuButton" parent="VBoxContainer/MenuBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "帮助"
+flat = false
+
+[node name="SkinMenu" type="MenuButton" parent="VBoxContainer/MenuBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "图版"
+flat = false
+
+[node name="Spacer" type="Control" parent="VBoxContainer/MenuBar"]
+custom_minimum_size = Vector2(20, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="InfoBox" type="HBoxContainer" parent="VBoxContainer/MenuBar"]
+layout_mode = 2
+alignment = 1
+
+[node name="DifficultyLabel" type="RichTextLabel" parent="VBoxContainer/MenuBar/InfoBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+bbcode_enabled = true
+text = "[color=#FFFF00]难度：[/color][color=#7B68EE]1[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
+[node name="LevelLabel" type="RichTextLabel" parent="VBoxContainer/MenuBar/InfoBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+bbcode_enabled = true
+text = "[color=#FFFF00]关卡 1：[/color][color=#7B68EE]不变[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
+[node name="Spacer3" type="Control" parent="VBoxContainer/MenuBar/InfoBox"]
+custom_minimum_size = Vector2(15, 0)
+layout_mode = 2
+
+[node name="TimerBar" type="ProgressBar" parent="VBoxContainer/MenuBar/InfoBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 20)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_timer_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_timer_fill")
+max_value = 60.0
+value = 60.0
+
+[node name="Spacer2" type="Control" parent="VBoxContainer/MenuBar"]
+custom_minimum_size = Vector2(20, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_vertical = 0
+alignment = 1
+
+[node name="UndoButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "回退"
+
+[node name="RedoButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "前进"
+
+[node name="PauseButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "暂停"
+
+[node name="RestartButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "重新开始本局"
+
+[node name="HintButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "提示"
+
+[node name="ShuffleButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "洗牌"
+
+[node name="TimeLabel" type="RichTextLabel" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+bbcode_enabled = true
+text = "[color=#FFFF00]总用时：[/color][color=#32CD32]00:00:00[/color] | [color=#FFFF00]本关用时：[/color][color=#32CD32]00:00:00[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
+[node name="ScoreLabel" type="Label" parent="VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "分数：0"
+label_settings = SubResource("LabelSettings_score")
+
+[node name="BoardCenter" type="CenterContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="VBoxContainer/BoardCenter"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+ratio = 1.71429
+
+[node name="GridContainer" type="GridContainer" parent="VBoxContainer/BoardCenter/AspectRatioContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+columns = 12
+
+[node name="Cell" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell2" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell3" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell4" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell5" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell6" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell7" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell8" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell9" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell10" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell11" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell12" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell13" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell14" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell15" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell16" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell17" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell18" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell19" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell20" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell21" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell22" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell23" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell24" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell25" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell26" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell27" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell28" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell29" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell30" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell31" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell32" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell33" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell34" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell35" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell36" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell37" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell38" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell39" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell40" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell41" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell42" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell43" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell44" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell45" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell46" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell47" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell48" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell49" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell50" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell51" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell52" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell53" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell54" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell55" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell56" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell57" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell58" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell59" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell60" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell61" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell62" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell63" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell64" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell65" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell66" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell67" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell68" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell69" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell70" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell71" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell72" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell73" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell74" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell75" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell76" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell77" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell78" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell79" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell80" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell81" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell82" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell83" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="Cell84" parent="VBoxContainer/BoardCenter/AspectRatioContainer/GridContainer" instance=ExtResource("2_e2o6t")]
+layout_mode = 2
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="GameOverPanel" type="PanelContainer" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -120.0
+offset_top = -75.0
+offset_right = 120.0
+offset_bottom = 75.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="GameOverLabel" type="Label" parent="CanvasLayer/GameOverPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "You Win!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CustomDialog" type="PanelContainer" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="CanvasLayer/CustomDialog"]
+layout_mode = 2
+color = Color(0, 0, 0, 0.75)
+
+[node name="CenterContainer" type="CenterContainer" parent="CanvasLayer/CustomDialog"]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer"]
+layout_mode = 2
+
+[node name="DialogTitle" type="Label" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "标题"
+horizontal_alignment = 1
+
+[node name="DialogContent" type="RichTextLabel" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1200, 0)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 26
+bbcode_enabled = true
+text = "内容"
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+
+[node name="DialogNameInput" type="LineEdit" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(280, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+placeholder_text = "请输入姓名"
+alignment = 1
+clear_button_enabled = true
+
+[node name="DialogHint" type="Label" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "点击任意位置或按任意键继续"
+horizontal_alignment = 1
+
+[node name="HintLine" type="Line2D" parent="CanvasLayer"]
+unique_name_in_owner = true
+width = 4.0
+default_color = Color(1, 0.27, 0, 1)
+
+[node name="PauseLabel" type="Label" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -120.0
+offset_top = -75.0
+offset_right = 120.0
+offset_bottom = 75.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "暂停"
+label_settings = SubResource("LabelSettings_pause")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[connection signal="pressed" from="VBoxContainer/HBoxContainer/UndoButton" to="." method="_on_undo_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxContainer/RedoButton" to="." method="_on_redo_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/HBoxContainer/RestartButton" to="." method="_on_restart_button_pressed"]
