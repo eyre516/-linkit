@@ -128,3 +128,4 @@ There are currently **no automated tests** in this project.
 - The project uses `.png` assets referenced by Godot UID imports. Do not delete `.png.import` files; Godot regenerates them, but deleting them can break references until re-import.
 - The `.editorconfig` only enforces `charset = utf-8`. Line endings are normalized to LF by `.gitattributes`.
 - **Development Log**: After every code change, append a new entry to `DEVELOPMENT_LOG.md` at the project root. Each entry should include the date/time, affected files, reason for the change, and a brief description of what was modified.
+- **Change Reporting**: When modifying code, always report to the user the affected file(s), exact location(s) (line numbers, node paths, function names, etc.), and the before/after modification content.

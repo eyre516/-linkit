@@ -34,9 +34,14 @@ var selected: bool = false:
 	set = _set_selected
 
 @onready var texture_rect: TextureRect = $MarginContainer/TextureRect
+@onready var selection_highlight: ColorRect = $SelectionHighlight
 
 # 当前正在运行的提示闪烁动画，避免与消除状态冲突
 var _flash_tween: Tween = null
+# 选中状态的缩放补间
+var _selection_tween: Tween = null
+# 消除动画补间
+var _eliminate_tween: Tween = null
 
 
 # 模块：图标渲染 —— 初始化时显示对应图标
@@ -94,19 +99,37 @@ func _set_tile_type(value: int) -> void:
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
 		_flash_tween = null
+	# 停止正在进行的消除动画，避免状态冲突
+	if _eliminate_tween != null and _eliminate_tween.is_valid():
+		_eliminate_tween.kill()
+		_eliminate_tween = null
 
 	tile_type = value
 	modulate = Color(1, 1, 1, 0) if tile_type == 0 else Color.WHITE
 	if texture_rect:
+		# 重置缩放和透明度，避免残留动画状态
+		texture_rect.scale = Vector2.ONE
+		texture_rect.modulate = Color.WHITE
 		update_icon()
+	if selection_highlight:
+		selection_highlight.visible = false
 
 
-# 设置选中状态：选中时高亮
+# 设置选中状态：选中时显示高亮层并轻微放大图标
 func _set_selected(value: bool) -> void:
 	selected = value
+	if selection_highlight:
+		selection_highlight.visible = selected
 	if texture_rect:
-		# 选中时提亮，未选中时恢复
-		texture_rect.modulate = Color(1.4, 1.4, 1.4) if selected else Color.WHITE
+		# 选中时轻微放大图标，未选中时恢复
+		if _selection_tween != null and _selection_tween.is_valid():
+			_selection_tween.kill()
+		_selection_tween = create_tween()
+		_selection_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		var target_scale := Vector2(1.12, 1.12) if selected else Vector2.ONE
+		# 确保缩放中心为图标中心
+		texture_rect.pivot_offset = texture_rect.size / 2.0
+		_selection_tween.tween_property(texture_rect, "scale", target_scale, 0.12)
 
 
 # 提示闪烁动画
@@ -118,6 +141,23 @@ func flash() -> void:
 	_flash_tween.tween_property(self, "modulate:a", 1.0, 0.25)
 	_flash_tween.tween_property(self, "modulate:a", 0.2, 0.25)
 	_flash_tween.tween_property(self, "modulate:a", 1.0, 0.25)
+
+
+# 消除动画：图标缩小并淡出，返回 Tween 供外部 await
+func play_eliminate_animation() -> Tween:
+	if _eliminate_tween != null and _eliminate_tween.is_valid():
+		_eliminate_tween.kill()
+	if _selection_tween != null and _selection_tween.is_valid():
+		_selection_tween.kill()
+	if texture_rect:
+		texture_rect.pivot_offset = texture_rect.size / 2.0
+		_eliminate_tween = create_tween()
+		_eliminate_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		_eliminate_tween.set_parallel(true)
+		_eliminate_tween.tween_property(texture_rect, "scale", Vector2.ZERO, 0.15)
+		_eliminate_tween.tween_property(texture_rect, "modulate:a", 0.0, 0.15)
+		return _eliminate_tween
+	return null
 
 
 # 模块：交互反馈 —— 左键点击时通知父节点

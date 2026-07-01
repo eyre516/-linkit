@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://clervudyy6xv"]
+[gd_scene load_steps=10 format=3 uid="uid://clervudyy6xv"]
 
 [ext_resource type="Script" uid="uid://yey3gxhknoih" path="res://game.gd" id="1_feb5d"]
 [ext_resource type="PackedScene" uid="uid://bm62ipt0ofqm7" path="res://cell.tscn" id="2_e2o6t"]
@@ -22,7 +22,10 @@ font_weight = 800
 [sub_resource type="LabelSettings" id="LabelSettings_pause"]
 font = SubResource("SystemFont_pause")
 font_size = 140
-font_color = Color(0, 0.35, 0.1, 0.9)
+font_color = Color(0.8, 0.25, 0.25, 0.9)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup_panel"]
+bg_color = Color(0.12, 0.12, 0.12, 0.92)
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -157,6 +160,7 @@ text = "前进"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.8, 0.25, 0.25, 1)
 text = "暂停"
 
 [node name="RestartButton" type="Button" parent="VBoxContainer/HBoxContainer"]
@@ -491,6 +495,7 @@ grow_vertical = 2
 [node name="GameOverLabel" type="Label" parent="CanvasLayer/GameOverPanel"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 text = "You Win!"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -517,7 +522,7 @@ layout_mode = 2
 [node name="DialogTitle" type="Label" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 38
+theme_override_font_sizes/font_size = 48
 text = "标题"
 horizontal_alignment = 1
 
@@ -525,7 +530,7 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(1200, 0)
 layout_mode = 2
-theme_override_font_sizes/normal_font_size = 26
+theme_override_font_sizes/normal_font_size = 32
 bbcode_enabled = true
 text = "内容"
 fit_content = true
@@ -535,9 +540,10 @@ horizontal_alignment = 1
 [node name="DialogNameInput" type="LineEdit" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(280, 40)
+custom_minimum_size = Vector2(360, 50)
 layout_mode = 2
 size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 28
 placeholder_text = "请输入姓名"
 alignment = 1
 clear_button_enabled = true
@@ -545,7 +551,7 @@ clear_button_enabled = true
 [node name="DialogHint" type="Label" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 30
 text = "点击任意位置或按任意键继续"
 horizontal_alignment = 1
 
@@ -572,6 +578,176 @@ text = "暂停"
 label_settings = SubResource("LabelSettings_pause")
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="PauseDim" type="ColorRect" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="PauseMenuPanel" type="PanelContainer" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -140.0
+offset_right = 150.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/PauseMenuPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 42
+text = "游戏已暂停"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "继续游戏（空格）"
+
+[node name="RestartButton2" type="Button" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "重新开始本局"
+
+[node name="SettingsButton" type="Button" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "设置"
+
+[node name="BackToMenuButton" type="Button" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "返回主菜单"
+
+[node name="SettingsPanel" type="PanelContainer" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -180.0
+offset_right = 200.0
+offset_bottom = 180.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/SettingsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 42
+text = "设置"
+horizontal_alignment = 1
+
+[node name="MasterVolumeRow" type="HBoxContainer" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/MasterVolumeRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "主音量"
+
+[node name="MasterSlider" type="HSlider" parent="CanvasLayer/SettingsPanel/VBoxContainer/MasterVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+
+[node name="MasterValueLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/MasterVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "80%"
+
+[node name="SFXVolumeRow" type="HBoxContainer" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/SFXVolumeRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "音效"
+
+[node name="SFXSlider" type="HSlider" parent="CanvasLayer/SettingsPanel/VBoxContainer/SFXVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+
+[node name="SFXValueLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/SFXVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "80%"
+
+[node name="BGMVolumeRow" type="HBoxContainer" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/BGMVolumeRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "背景音乐"
+
+[node name="BGMSlider" type="HSlider" parent="CanvasLayer/SettingsPanel/VBoxContainer/BGMVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+
+[node name="BGMValueLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/BGMVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "50%"
+
+[node name="SFXMuteButton" type="CheckButton" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "音效"
+
+[node name="BGMMuteButton" type="CheckButton" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "背景音乐"
+
+[node name="CloseSettingsButton" type="Button" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "返回"
 
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/UndoButton" to="." method="_on_undo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RedoButton" to="." method="_on_redo_button_pressed"]

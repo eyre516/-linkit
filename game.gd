@@ -131,6 +131,7 @@ var undo_history: Array[Dictionary] = []
 var _hint_active: bool = false
 var _timer_running: bool = false
 var _is_paused: bool = false
+var _is_animating: bool = false
 
 # 鼠标按键状态（用于左右键同时按下的洗牌快捷键）
 var _left_mouse_pressed: bool = false
@@ -154,6 +155,7 @@ var current_difficulty: int = 1
 var _leaderboard_data: Dictionary = {}
 const LEADERBOARD_FILE := "user://leaderboard.json"
 const LEADERBOARD_MAX_ENTRIES := 10
+const SETTINGS_FILE := "user://settings.json"
 
 # 关卡完成弹窗待进入的下一关
 var _pending_next_level: int = -1
@@ -196,6 +198,17 @@ var _bgm_player: AudioStreamPlayer
 @onready var game_over_label: Label = %GameOverLabel
 @onready var game_over_panel: PanelContainer = %GameOverPanel
 @onready var pause_label: Label = %PauseLabel
+@onready var pause_dim: ColorRect = %PauseDim
+@onready var pause_menu_panel: PanelContainer = %PauseMenuPanel
+@onready var settings_panel: PanelContainer = %SettingsPanel
+@onready var master_slider: HSlider = %MasterSlider
+@onready var sfx_slider: HSlider = %SFXSlider
+@onready var bgm_slider: HSlider = %BGMSlider
+@onready var master_value_label: Label = %MasterValueLabel
+@onready var sfx_value_label: Label = %SFXValueLabel
+@onready var bgm_value_label: Label = %BGMValueLabel
+@onready var sfx_mute_button: CheckButton = %SFXMuteButton
+@onready var bgm_mute_button: CheckButton = %BGMMuteButton
 @onready var cell_scene := preload("res://cell.tscn")
 
 @onready var game_menu: MenuButton = %GameMenu
@@ -236,6 +249,19 @@ func _ready() -> void:
 	shuffle_button.pressed.connect(_on_shuffle_button_pressed)
 	pause_button.pressed.connect(_toggle_pause)
 
+	# 暂停菜单按钮
+	%ResumeButton.pressed.connect(_on_resume_button_pressed)
+	%RestartButton2.pressed.connect(_on_restart_button_pressed)
+	%SettingsButton.pressed.connect(_on_settings_button_pressed)
+	%CloseSettingsButton.pressed.connect(_on_close_settings_button_pressed)
+
+	# 设置面板控件
+	master_slider.value_changed.connect(_on_master_volume_slider_changed)
+	sfx_slider.value_changed.connect(_on_sfx_volume_slider_changed)
+	bgm_slider.value_changed.connect(_on_bgm_volume_slider_changed)
+	sfx_mute_button.toggled.connect(_on_sfx_mute_toggled)
+	bgm_mute_button.toggled.connect(_on_bgm_mute_toggled)
+
 	# 禁止按钮通过空格/回车获得焦点，避免空格误触提示等功能
 	undo_button.focus_mode = Control.FOCUS_NONE
 	redo_button.focus_mode = Control.FOCUS_NONE
@@ -247,6 +273,13 @@ func _ready() -> void:
 	options_menu.focus_mode = Control.FOCUS_NONE
 	help_menu.focus_mode = Control.FOCUS_NONE
 	skin_menu.focus_mode = Control.FOCUS_NONE
+	%ResumeButton.focus_mode = Control.FOCUS_NONE
+	%RestartButton2.focus_mode = Control.FOCUS_NONE
+	%SettingsButton.focus_mode = Control.FOCUS_NONE
+	%CloseSettingsButton.focus_mode = Control.FOCUS_NONE
+
+	# 加载持久化设置
+	_load_settings()
 
 	# 设置分数标签的缩放中心，便于加分动画
 	score_label.resized.connect(_on_score_label_resized)
@@ -532,6 +565,138 @@ func _play_random_bgm() -> void:
 	_update_background_music()
 
 
+# 模块：设置 —— 从文件加载音量与开关状态
+func _load_settings() -> void:
+	if not FileAccess.file_exists(SETTINGS_FILE):
+		_apply_settings_to_ui()
+		return
+	var file := FileAccess.open(SETTINGS_FILE, FileAccess.READ)
+	if file == null:
+		_apply_settings_to_ui()
+		return
+	var json := JSON.new()
+	var error := json.parse(file.get_as_text())
+	file.close()
+	if error != OK:
+		_apply_settings_to_ui()
+		return
+	var data = json.data
+	if data is Dictionary:
+		master_volume = clampf(data.get("master_volume", master_volume), 0.0, 1.0)
+		sfx_volume = clampf(data.get("sfx_volume", sfx_volume), 0.0, 1.0)
+		bgm_volume = clampf(data.get("bgm_volume", bgm_volume), 0.0, 1.0)
+		sound_effects_enabled = data.get("sound_effects_enabled", sound_effects_enabled)
+		background_music_enabled = data.get("background_music_enabled", background_music_enabled)
+	_apply_settings_to_ui()
+	_update_background_music()
+
+
+# 模块：设置 —— 保存音量与开关状态到文件
+func _save_settings() -> void:
+	var file := FileAccess.open(SETTINGS_FILE, FileAccess.WRITE)
+	if file == null:
+		return
+	var data := {
+		"master_volume": master_volume,
+		"sfx_volume": sfx_volume,
+		"bgm_volume": bgm_volume,
+		"sound_effects_enabled": sound_effects_enabled,
+		"background_music_enabled": background_music_enabled,
+	}
+	file.store_string(JSON.stringify(data, "\t"))
+	file.close()
+
+
+# 模块：设置 —— 将当前设置同步到设置面板 UI
+func _apply_settings_to_ui() -> void:
+	master_slider.set_block_signals(true)
+	sfx_slider.set_block_signals(true)
+	bgm_slider.set_block_signals(true)
+	sfx_mute_button.set_block_signals(true)
+	bgm_mute_button.set_block_signals(true)
+
+	master_slider.value = master_volume
+	sfx_slider.value = sfx_volume
+	bgm_slider.value = bgm_volume
+	master_value_label.text = "%d%%" % int(master_volume * 100)
+	sfx_value_label.text = "%d%%" % int(sfx_volume * 100)
+	bgm_value_label.text = "%d%%" % int(bgm_volume * 100)
+	sfx_mute_button.button_pressed = sound_effects_enabled
+	bgm_mute_button.button_pressed = background_music_enabled
+
+	master_slider.set_block_signals(false)
+	sfx_slider.set_block_signals(false)
+	bgm_slider.set_block_signals(false)
+	sfx_mute_button.set_block_signals(false)
+	bgm_mute_button.set_block_signals(false)
+
+	# 同步 OptionsMenu 的勾选状态
+	var options_popup := options_menu.get_popup()
+	options_popup.set_item_checked(0, sound_effects_enabled)
+	options_popup.set_item_checked(1, background_music_enabled)
+
+
+# 模块：设置 —— 主音量滑块变化
+func _on_master_volume_slider_changed(value: float) -> void:
+	master_volume = value
+	master_value_label.text = "%d%%" % int(value * 100)
+	_update_background_music()
+	_save_settings()
+
+
+# 模块：设置 —— 音效音量滑块变化
+func _on_sfx_volume_slider_changed(value: float) -> void:
+	sfx_volume = value
+	sfx_value_label.text = "%d%%" % int(value * 100)
+	_save_settings()
+
+
+# 模块：设置 —— 背景音乐音量滑块变化
+func _on_bgm_volume_slider_changed(value: float) -> void:
+	bgm_volume = value
+	bgm_value_label.text = "%d%%" % int(value * 100)
+	_update_background_music()
+	_save_settings()
+
+
+# 模块：设置 —— 音效开关变化
+func _on_sfx_mute_toggled(pressed: bool) -> void:
+	sound_effects_enabled = pressed
+	_save_settings()
+
+
+# 模块：设置 —— 背景音乐开关变化
+func _on_bgm_mute_toggled(pressed: bool) -> void:
+	background_music_enabled = pressed
+	_update_background_music()
+	_save_settings()
+
+
+# 模块：设置 —— 打开设置面板
+func _open_settings_panel() -> void:
+	settings_panel.show()
+
+
+# 模块：设置 —— 关闭设置面板
+func _close_settings_panel() -> void:
+	settings_panel.hide()
+
+
+# 暂停菜单：继续游戏
+func _on_resume_button_pressed() -> void:
+	_set_paused(false)
+
+
+# 暂停菜单：打开设置
+func _on_settings_button_pressed() -> void:
+	_open_settings_panel()
+
+
+# 设置面板：关闭按钮
+func _on_close_settings_button_pressed() -> void:
+	_close_settings_panel()
+
+
 # 模块：网格与显示 —— 生成棋盘格子并绑定点击事件
 func _setup_grid() -> void:
 	var rows := _get_rows()
@@ -659,10 +824,14 @@ func _on_options_menu_item_pressed(index: int) -> void:
 		0:
 			sound_effects_enabled = not sound_effects_enabled
 			popup.set_item_checked(0, sound_effects_enabled)
+			_apply_settings_to_ui()
+			_save_settings()
 		1:
 			background_music_enabled = not background_music_enabled
 			popup.set_item_checked(1, background_music_enabled)
 			_update_background_music()
+			_apply_settings_to_ui()
+			_save_settings()
 		5:
 			var lb_content := _get_leaderboard_text(1)
 			lb_content += "\n"
@@ -681,6 +850,8 @@ func _on_master_volume_menu_item_pressed(index: int) -> void:
 		3: master_volume = 0.75
 		4: master_volume = 1.0
 	_update_background_music()
+	_apply_settings_to_ui()
+	_save_settings()
 
 
 # 处理音效音量子菜单
@@ -691,6 +862,8 @@ func _on_sfx_volume_menu_item_pressed(index: int) -> void:
 		2: sfx_volume = 0.5
 		3: sfx_volume = 0.75
 		4: sfx_volume = 1.0
+	_apply_settings_to_ui()
+	_save_settings()
 
 
 # 处理背景音乐音量子菜单
@@ -702,6 +875,8 @@ func _on_bgm_volume_menu_item_pressed(index: int) -> void:
 		3: bgm_volume = 0.75
 		4: bgm_volume = 1.0
 	_update_background_music()
+	_apply_settings_to_ui()
+	_save_settings()
 
 
 # 处理帮助菜单：打开连连看规则、快捷键说明、积分规则或关于弹窗
@@ -809,6 +984,12 @@ func _hide_custom_dialog() -> void:
 
 # 键盘与鼠标快捷键处理
 func _input(event: InputEvent) -> void:
+	# 设置面板打开时，按 Esc 关闭设置面板
+	if settings_panel.visible and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_close_settings_panel()
+		get_viewport().set_input_as_handled()
+		return
+
 	# 自定义弹窗打开时，按任意键或点击鼠标关闭
 	if custom_dialog.visible:
 		# 姓名输入弹窗由 LineEdit 的 text_submitted 信号处理回车提交
@@ -820,12 +1001,15 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
+		# 设置面板打开时不响应游戏快捷键（让 UI 控件自己处理输入）
+		if settings_panel.visible:
+			return
 		match event.keycode:
 			KEY_T:
 				_on_hint_button_pressed()
 			KEY_X:
 				_on_shuffle_button_pressed()
-			KEY_SPACE:
+			KEY_SPACE, KEY_ESCAPE:
 				_toggle_pause()
 		return
 
@@ -866,8 +1050,13 @@ func _toggle_pause() -> void:
 func _set_paused(paused: bool, show_pause_label: bool = true) -> void:
 	_is_paused = paused
 	_timer_running = not paused
-	pause_label.visible = paused and show_pause_label
+	pause_label.visible = false
+	pause_dim.visible = paused and show_pause_label
+	pause_menu_panel.visible = paused and show_pause_label
 	pause_button.text = "继续" if paused else "暂停"
+	# 恢复游戏时自动关闭设置面板
+	if not paused:
+		_close_settings_panel()
 
 	undo_button.disabled = paused or move_history.is_empty()
 	redo_button.disabled = paused or undo_history.is_empty()
@@ -1064,7 +1253,7 @@ func _pos_to_index(r: int, c: int) -> int:
 func _on_cell_clicked(index: int) -> void:
 	if game_state != GameState.PLAYING:
 		return
-	if _is_paused:
+	if _is_paused or _is_animating:
 		return
 
 	var pos := _index_to_pos(index)
@@ -1104,7 +1293,21 @@ func _on_cell_clicked(index: int) -> void:
 		_play_sound(ERROR_SOUND)
 		return
 
-	# 可以消除（成功音效）
+	# 可以消除：先播放消除动画，再更新棋盘数据
+	var cell1: Cell = grid_container.get_child(selected_index)
+	var cell2: Cell = grid_container.get_child(index)
+	_is_animating = true
+	selected_index = -1
+	_update_all_cells()
+
+	var tween1 := cell1.play_eliminate_animation()
+	var tween2 := cell2.play_eliminate_animation()
+	if tween1 != null:
+		await tween1.finished
+	if tween2 != null:
+		await tween2.finished
+
+	# 动画结束后才真正消除并计分
 	var time_since_last: float = _eliminate(r1, c1, r, c)
 	if current_level == 2:
 		match _level2_direction:
@@ -1132,9 +1335,9 @@ func _on_cell_clicked(index: int) -> void:
 		_collapse_vertical_converge()
 	elif current_level == 10:
 		_collapse_quadrant_spread()
-	selected_index = -1
 	_update_all_cells()
 	_update_ui()
+	_is_animating = false
 
 	if time_since_last > 10.0:
 		_play_sound(SUCCESS_SLOW_SOUND)
@@ -1759,7 +1962,7 @@ func _shuffle_remaining() -> void:
 
 # 模块：撤销 / 重做 —— 撤销上一步消除
 func _on_undo_button_pressed() -> void:
-	if move_history.is_empty() or _is_paused:
+	if move_history.is_empty() or _is_paused or _is_animating:
 		return
 
 	var last: Dictionary = move_history.pop_back()
@@ -1798,7 +2001,7 @@ func _on_undo_button_pressed() -> void:
 
 # 模块：撤销 / 重做 —— 重做一步被撤销的消除
 func _on_redo_button_pressed() -> void:
-	if undo_history.is_empty() or _is_paused:
+	if undo_history.is_empty() or _is_paused or _is_animating:
 		return
 
 	var redo: Dictionary = undo_history.pop_back()
@@ -1839,7 +2042,7 @@ func _on_redo_button_pressed() -> void:
 
 # 模块：提示与洗牌 —— 高亮一对可连通的图案并画线
 func _on_hint_button_pressed() -> void:
-	if game_state != GameState.PLAYING or _hint_active or _is_paused:
+	if game_state != GameState.PLAYING or _hint_active or _is_paused or _is_animating:
 		return
 
 	var path: Array[Vector2i] = _find_hint_pair()
@@ -1871,7 +2074,7 @@ func _on_hint_button_pressed() -> void:
 
 # 模块：提示与洗牌 —— 手动重排剩余图案
 func _on_shuffle_button_pressed() -> void:
-	if game_state != GameState.PLAYING or _is_paused:
+	if game_state != GameState.PLAYING or _is_paused or _is_animating:
 		return
 
 	_shuffle_remaining()
@@ -1882,4 +2085,6 @@ func _on_shuffle_button_pressed() -> void:
 
 # 重新开始本局（保留总分与总用时）
 func _on_restart_button_pressed() -> void:
+	if _is_animating:
+		return
 	restart_game(false)

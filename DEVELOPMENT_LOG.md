@@ -290,6 +290,136 @@ cd assets/连连看例子
 
 ---
 
+### 15. 调整暂停按钮与暂停弹窗文本颜色为柔和红色
+
+**时间**：2026-07-01  
+**涉及文件**：`game.tscn`
+
+**原因**：用户希望暂停相关的文字颜色不那么刺眼。
+
+**改动**：
+- 顶部按钮 `VBoxContainer/HBoxContainer/PauseButton`：添加 `theme_override_colors/font_color = Color(0.8, 0.25, 0.25, 1)`（第 160 行）。
+- 屏幕中央暂停大字 `CanvasLayer/PauseLabel`：其使用的 `LabelSettings_pause` 资源中的 `font_color` 从原来的 `Color(0, 0.35, 0.1, 0.9)` 改为 `Color(0.8, 0.25, 0.25, 0.9)`（第 25 行）。
+
+两处均使用偏暗、低饱和度的红色，并保持暂停大字的半透明效果。
+
+---
+
+### 16. 记录变更报告规范到 AGENTS.md
+
+**时间**：2026-07-01  
+**涉及文件**：`AGENTS.md`
+
+**原因**：用户要求以后每次修改代码时，都要明确报告修改的文件、位置和内容。
+
+**改动**：在 `AGENTS.md` 的 `Notes for Agents` 部分新增一条 **Change Reporting** 规范，要求每次代码修改后向用户报告受影响的文件、具体位置以及修改前后的内容。
+
+---
+
+### 17. 优化选中高亮、消除动画、暂停菜单与音量设置
+
+**时间**：2026-07-01  
+**涉及文件**：`cell.tscn`、`cell.gd`、`game.tscn`、`game.gd`
+
+**原因**：用户希望实现之前建议的三项优化：选中高亮 + 消除动画、暂停菜单面板 + Esc 暂停、音量设置面板与持久化。
+
+#### 17.1 选中高亮（`cell.tscn`、`cell.gd`）
+
+- `cell.tscn` 第 34-42 行：在 `Cell` 节点下新增 `SelectionHighlight`（`ColorRect`），全屏锚定、`mouse_filter = 2`、颜色 `Color(1, 0.8, 0.2, 0.35)`，初始隐藏。
+- `cell.gd` 第 37 行：新增 `@onready var selection_highlight` 引用。
+- `cell.gd` 第 42-44 行：新增 `_selection_tween`、`_eliminate_tween` 变量。
+- `cell.gd` 第 118-132 行：重写 `_set_selected`，选中时显示高亮层，并给 `TextureRect` 添加 0.12 秒放大到 `1.12` 的补间；取消选中时隐藏高亮并恢复缩放。
+- `cell.gd` 第 97-115 行：`_set_tile_type` 中停止消除动画、重置 `TextureRect` 缩放与透明度，并隐藏高亮层。
+
+#### 17.2 消除动画（`cell.gd`、`game.gd`）
+
+- `cell.gd` 第 146-160 行：新增 `play_eliminate_animation()`，使用 Tween 在 0.25 秒内将图标缩放至 0 并淡出，返回 Tween 供外部 `await`。
+- `game.gd` 第 137 行：新增 `_is_animating` 状态变量。
+- `game.gd` 第 1247-1345 行：重写 `_on_cell_clicked` 的匹配成功分支：
+  - 先设置 `_is_animating = true` 并清除选中状态；
+  - 对两个匹配格子调用 `play_eliminate_animation()` 并 `await` 动画结束；
+  - 再调用 `_eliminate()` 更新棋盘、分数、坍塌；
+  - 最后设置 `_is_animating = false`。
+- `game.gd` 第 1251、1804、1838、1852、1886 行：在 `_on_cell_clicked`、`_on_undo_button_pressed`、`_on_redo_button_pressed`、`_on_hint_button_pressed`、`_on_shuffle_button_pressed`、`_on_restart_button_pressed` 中增加 `_is_animating` 防护，动画期间禁止这些操作。
+
+#### 17.3 暂停菜单面板 + Esc 暂停（`game.tscn`、`game.gd`）
+
+- `game.tscn` 第 577-632 行：在 `CanvasLayer` 下新增：
+  - `PauseDim`（全屏半透明黑色遮罩，`Color(0, 0, 0, 0.5)`）
+  - `PauseMenuPanel`（居中的 `PanelContainer`），内部 `VBoxContainer` 包含标题 "游戏已暂停"、按钮 "继续游戏"、`"重新开始本局"`、`"设置"`、隐藏的 `"返回主菜单"`。
+- `game.gd` 第 201-211 行：新增 `@onready` 引用 `pause_dim`、`pause_menu_panel` 等。
+- `game.gd` 第 252-256 行：在 `_ready` 中连接暂停菜单按钮信号。
+- `game.gd` 第 276-279 行：在 `_ready` 中设置新按钮 `focus_mode = FOCUS_NONE`。
+- `game.gd` 第 1047-1059 行：修改 `_set_paused`，隐藏旧的 `PauseLabel`，改为显示/隐藏 `PauseDim` 与 `PauseMenuPanel`；恢复游戏时自动关闭设置面板。
+- `game.gd` 第 986-1011 行：修改 `_input`：
+  - 设置面板打开时按 Esc 关闭设置面板；
+  - 自定义弹窗打开时 Esc 关闭弹窗；
+  - `KEY_SPACE` 与 `KEY_ESCAPE` 都用于切换暂停；
+  - 设置面板打开时屏蔽游戏快捷键。
+
+#### 17.4 音量设置面板与持久化（`game.tscn`、`game.gd`）
+
+- `game.tscn` 第 634-730 行：在 `CanvasLayer` 下新增 `SettingsPanel`（居中的 `PanelContainer`），内部包含：
+  - 标题 "设置"
+  - 三行音量控制：主音量 / 音效 / 背景音乐，每行含 `Label`、`HSlider`（`0~1`，步进 `0.01`）、百分比 `Label`
+  - `CheckButton` "音效"、"背景音乐"
+  - "返回" 按钮
+- `game.gd` 第 159 行：新增 `SETTINGS_FILE := "user://settings.json"`。
+- `game.gd` 第 204-211 行：新增设置面板控件引用。
+- `game.gd` 第 258-263 行：在 `_ready` 中连接滑块与复选框信号。
+- `game.gd` 第 568-697 行：新增设置相关函数：
+  - `_load_settings()` / `_save_settings()`：读写 `user://settings.json`
+  - `_apply_settings_to_ui()`：同步滑块、百分比标签、静音开关与 `OptionsMenu` 勾选状态
+  - `_on_master_volume_slider_changed` / `_on_sfx_volume_slider_changed` / `_on_bgm_volume_slider_changed`
+  - `_on_sfx_mute_toggled` / `_on_bgm_mute_toggled`
+  - `_open_settings_panel()` / `_close_settings_panel()`
+  - `_on_resume_button_pressed()` / `_on_settings_button_pressed()` / `_on_close_settings_button_pressed()`
+- `game.gd` 第 281 行：在 `_ready` 末尾调用 `_load_settings()` 加载持久化设置。
+- `game.gd` 第 670-704 行：修改 `OptionsMenu` 的音量/静音菜单处理函数，使其修改后也调用 `_apply_settings_to_ui()` 与 `_save_settings()`，保持两处状态同步。
+
+#### 17.5 弹窗背景不透明化（`game.tscn`）
+
+**时间**：2026-07-01（同日追加）
+
+**原因**：用户反馈暂停菜单和设置面板太透明，文字看不清楚。
+
+**改动**：
+- `game.tscn` 第 1 行：`load_steps` 从 `9` 改为 `10`。
+- `game.tscn` 第 28-29 行：新增 `StyleBoxFlat_popup_panel`，`bg_color = Color(0.12, 0.12, 0.12, 0.92)`（深灰、92% 不透明度）。
+- `game.tscn` 第 599 行：为 `PauseMenuPanel` 添加 `theme_override_styles/panel = SubResource("StyleBoxFlat_popup_panel")`。
+- `game.tscn` 第 656 行：为 `SettingsPanel` 添加同样的面板样式。
+
+#### 17.6 加快消除动画速度（`cell.gd`）
+
+**时间**：2026-07-01（同日追加）
+
+**原因**：用户希望消除动画更快一点。
+
+**改动**：`cell.gd` 第 154-155 行，`play_eliminate_animation()` 中缩放和淡出动画的时长从 `0.25` 秒改为 `0.15` 秒。
+
+#### 17.7 弹窗文字放大（`game.tscn`）
+
+**时间**：2026-07-01（同日追加）
+
+**原因**：用户希望各种弹窗里的字再大一些。
+
+**改动**：
+- `CanvasLayer/GameOverPanel/GameOverLabel`：新增 `theme_override_font_sizes/font_size = 36`。
+- `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/DialogTitle`：`38` → `48`。
+- `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/DialogContent`：`normal_font_size` `26` → `32`。
+- `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/DialogHint`：`24` → `30`。
+- `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/DialogNameInput`：`custom_minimum_size` 从 `280×40` 改为 `360×50`，新增字体大小 `28`。
+- `CanvasLayer/PauseMenuPanel/VBoxContainer/TitleLabel`：`32` → `42`。
+- `CanvasLayer/PauseMenuPanel/VBoxContainer` 下四个按钮：新增 `theme_override_font_sizes/font_size = 32`。
+- `CanvasLayer/SettingsPanel/VBoxContainer/TitleLabel`：`32` → `42`。
+- 设置面板内三个音量标签与三个百分比标签：新增 `theme_override_font_sizes/font_size = 28`。
+- 设置面板内两个 `CheckButton`：新增 `theme_override_font_sizes/font_size = 30`。
+- `CanvasLayer/SettingsPanel/VBoxContainer/CloseSettingsButton`：新增 `theme_override_font_sizes/font_size = 32`。
+
+**测试情况**：Godot 编辑器未在当前环境安装，无法直接运行；已进行静态检查，未发现明显语法或节点引用错误。建议启动 Godot 后重点验证消除动画、暂停菜单按钮、Esc 快捷键与音量滑块的实时效果。
+
+---
+
 ## 待后续考虑
 
 - [ ] 增加自动测试或启动后的 smoke test
