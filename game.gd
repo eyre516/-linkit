@@ -187,7 +187,7 @@ var _bgm_player: AudioStreamPlayer
 @onready var hint_button: Button = %HintButton
 @onready var shuffle_button: Button = %ShuffleButton
 @onready var time_label: RichTextLabel = %TimeLabel
-@onready var score_label: Label = %ScoreLabel
+@onready var score_label: RichTextLabel = %ScoreLabel
 @onready var difficulty_label: RichTextLabel = %DifficultyLabel
 @onready var level_label: RichTextLabel = %LevelLabel
 @onready var timer_bar: ProgressBar = %TimerBar
@@ -293,8 +293,8 @@ func _update_level_info() -> void:
 		2: difficulty_name = "中级"
 		3: difficulty_name = "高级"
 	var level_total := 5 if current_difficulty == 1 else 10
-	difficulty_label.text = "[color=#FFFF00]难度：[/color][color=#7B68EE]%s[/color]" % difficulty_name
-	level_label.text = "[color=#FFFF00]关卡 %d/%d：[/color][color=#7B68EE]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
+	difficulty_label.text = "[color=#BB8F65]难度：[/color][color=#5AB4E0]%s[/color]" % difficulty_name
+	level_label.text = "[color=#BB8F65]关卡 %d/%d：[/color][color=#5AB4E0]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
 
 
 
@@ -475,7 +475,7 @@ func _get_leaderboard_text(difficulty: int) -> String:
 	var raw_entries = _leaderboard_data.get(key, [])
 	var entries: Array = raw_entries if raw_entries is Array else []
 	var diff_name := "初级" if difficulty == 1 else ("中级" if difficulty == 2 else "高级")
-	var content := "[center][color=#ffcc66][b]%s排行榜（%d 关）[/b][/color][/center]\n\n" % [diff_name, _get_max_level_for_difficulty(difficulty)]
+	var content := "[center][color=#E0B45A][b]%s排行榜（%d 关）[/b][/color][/center]\n\n" % [diff_name, _get_max_level_for_difficulty(difficulty)]
 	if entries.is_empty():
 		content += "[center]暂无记录[/center]"
 		return content
@@ -494,15 +494,15 @@ func _get_max_level_for_difficulty(difficulty: int) -> int:
 # 显示欢迎弹窗
 func _show_welcome_dialog() -> void:
 	var content := "[center]"
-	content += "[color=#ffcc66][b]【游戏规则】[/b][/color]\n"
-	content += "点击两个 [color=#ff9999]相同图案[/color] 的格子，\n"
+	content += "[color=#E0B45A][b]【游戏规则】[/b][/color]\n"
+	content += "点击两个 [color=#E08787]相同图案[/color] 的格子，\n"
 	content += "若能用不超过 [color=#66ff66][b]2 个转弯[/b][/color] 的直线连接，则消除。\n"
 	content += "消除所有图案即可获胜。\n\n"
-	content += "[color=#ffcc66][b]【操作说明】[/b][/color]\n"
-	content += "[color=#66ccff][b]T / 鼠标右键[/b][/color]：提示\n"
-	content += "[color=#66ccff][b]X / 左右键同时按[/b][/color]：洗牌\n"
-	content += "[color=#66ccff][b]空格键 / 鼠标左键快速双击[/b][/color]：暂停 / 继续\n"
-	content += "[color=#66ccff][b]鼠标左键[/b][/color]：选择 / 消除"
+	content += "[color=#E0B45A][b]【操作说明】[/b][/color]\n"
+	content += "[color=#5AB4E0][b]T / 鼠标右键[/b][/color]：提示\n"
+	content += "[color=#5AB4E0][b]X / 左右键同时按[/b][/color]：洗牌\n"
+	content += "[color=#5AB4E0][b]空格键 / 鼠标左键快速双击[/b][/color]：暂停 / 继续\n"
+	content += "[color=#5AB4E0][b]鼠标左键[/b][/color]：选择 / 消除"
 	content += "[/center]"
 	_show_custom_dialog(DialogType.WELCOME, "欢迎游玩连连看", content, "点击任意位置或按任意键开始")
 	_flash_dialog_hint()
@@ -1217,12 +1217,12 @@ func _format_time(seconds: float) -> String:
 
 # 刷新时间显示
 func _update_time_labels() -> void:
-	time_label.text = "[color=#FFFF00]总用时：[/color][color=#32CD32]%s[/color] | [color=#FFFF00]本关用时：[/color][color=#32CD32]%s[/color]" % [_format_time(total_game_time), _format_time(level_time)]
+	time_label.text = "[color=#BB8F65]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#BB8F65]本关用时：[/color][color=#FFF8F0]%s[/color]" % [_format_time(total_game_time), _format_time(level_time)]
 
 
 # 刷新分数显示
 func _update_score_label() -> void:
-	score_label.text = "分数：%d" % score
+	score_label.text = "[color=#BB8F65]分数：[/color][color=#E07A82]%d[/color]" % score
 
 
 # 分数标签大小变化时同步缩放中心
@@ -1233,11 +1233,11 @@ func _on_score_label_resized() -> void:
 func _emphasize_score_label() -> void:
 	var tween := create_tween().set_parallel(true)
 	tween.tween_property(score_label, "scale", Vector2(1.4, 1.4), 0.12)
-	tween.tween_property(score_label, "modulate", Color(1, 0.85, 0.2), 0.12)
+	tween.tween_property(score_label, "modulate", Color(0.88, 0.628, 0.638), 0.12)
 
 	var tween_back := create_tween()
 	tween_back.tween_property(score_label, "scale", Vector2(1.0, 1.0), 0.18).set_delay(0.12)
-	tween_back.tween_property(score_label, "modulate", Color(1, 0, 0), 0.18).set_delay(0.12)
+	tween_back.tween_property(score_label, "modulate", Color(1, 1, 1), 0.18).set_delay(0.12)
 
 
 # 索引与行列坐标互转

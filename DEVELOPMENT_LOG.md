@@ -426,3 +426,280 @@ cd assets/连连看例子
 - [ ] 优化高级难度棋盘时间 `MAX_TIME`（当前固定 60 秒）
 - [ ] 考虑为经典图案的 selected 状态设计更明显的选中效果（当前 selected 版本为黑色剪影，游戏中使用 `modulate` 高亮）
 - [ ] 背景图加载目前按文件名排序选择，可考虑按关卡主题更精细匹配
+
+### 18. 统一海洋主题视觉风格
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`（新增）、`game.tscn`、`cell.tscn`、`game.gd`
+
+**原因**：用户希望将整体 UI 统一为大海主题，使用浅蓝海、浅黄沙、珊瑚粉、贝壳白、海鸟喙褐等配色，并用 Theme 资源集中管理按钮、滑块、进度条、面板样式，同时要求按钮具备圆角与 hover/pressed 反馈。
+
+**改动**：
+
+- 新增 `ocean_theme.tres`：
+  - 定义完整的 `Theme` 资源，包含 `Button`、`MenuButton`、`ProgressBar`、`HSlider`、`PanelContainer`、`PopupMenu`、`LineEdit`、`Label`、`RichTextLabel`、`CheckButton` 的配色与样式。
+  - 按钮使用贝壳白/沙黄色底色 + 海鸟喙褐色边框，圆角半径 8；hover 时边框变为珊瑚粉，pressed 时底色变为海鸟喙褐色、文字变白。
+  - 进度条背景为浅海蓝，填充为浅粉色偏红（危险色）。
+  - 滑块轨道为浅海蓝，已填充段为珊瑚粉。
+  - 面板/弹窗使用贝壳白底色 + 浅海蓝边框，圆角 12–16。
+  - 新增两个自定义主题类型：`MenuBarPanel`（浅海蓝底色）与 `BoardPanel`（沙黄色底色）。
+
+- `game.tscn`：
+  - 根节点 `Game` 应用 `theme = ExtResource("3_ocean")`。
+  - `Background` 颜色从纯黑改为浅海蓝 `Color(0.62, 0.85, 0.93, 1)`。
+  - 菜单栏改造：`MenuBar` 从 `HBoxContainer` 改为 `PanelContainer`，内部嵌套 `HBoxContainer`，并设置 `theme_type_variation = "MenuBarPanel"`。
+  - 棋盘背景改造：在 `BoardCenter` 与 `AspectRatioContainer` 之间新增 `BoardPanel`（`theme_type_variation = "BoardPanel"`），使棋盘区域呈现沙黄色底板。
+  - 移除所有已被主题接管的 `theme_override_styles/...`、`theme_override_colors/...`、`label_settings = SubResource("LabelSettings_score")` 等覆盖。
+  - 移除内联的 `Theme_main`、`StyleBoxFlat_timer_bg`、`StyleBoxFlat_timer_fill`、`LabelSettings_score`、`StyleBoxFlat_popup_panel` 子资源，`load_steps` 从 10 调整为 6。
+  - `HintLine` 颜色改为珊瑚粉。
+  - `PauseLabel` 的 `LabelSettings_pause` 颜色改为浅粉色偏红。
+  - `CustomDialog/Background` 与 `PauseDim` 遮罩改为深海蓝半透明，呼应海洋主题。
+
+- `cell.tscn`：
+  - 格子 `StyleBoxFlat` 底色改为贝壳白，边框改为海鸟喙褐色，四边圆角半径 8。
+  - 选中高亮 `SelectionHighlight` 颜色改为珊瑚粉、不透明度 0.45。
+
+- `game.gd`：
+  - `_update_level_info()`：难度/关卡标签前缀改为海鸟喙褐色 `#D4A373`，内容值改为浅海蓝色 `#7EC8E3`。
+  - `_update_time_labels()`：时间标签前缀改为海鸟喙褐色，时间值改为贝壳白色 `#FFF8F0`。
+  - `_emphasize_score_label()`：分数强调动画的闪烁色改为珊瑚粉，恢复色改为白色，以配合主题默认字体色。
+
+**验证**：
+- 使用脚本检查 `game.tscn`、`cell.tscn`、`ocean_theme.tres` 中所有 `SubResource` / `ExtResource` 引用，确认无缺失。
+- 当前环境未安装 Godot 编辑器，建议在 Godot 4.5 中打开项目，重点检查菜单栏背景、棋盘沙底板、按钮 hover/pressed 效果以及倒计时进度条颜色是否正确应用。
+
+### 19. 按钮现代化 + 经典棋子去黑底 + 背景统一为浅蓝
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`、`assets/classicPics/level3/normal/tile_*.png`、`game.tscn`
+
+**原因**：用户反馈当前按钮样式仍显古老；经典图版棋子因黑色背景显得暗沉，希望像宝可梦棋子一样整体偏浅；同时要求整个背景统一为浅蓝色，不再保留棋盘中间的沙滩色区域。
+
+**改动**：
+
+- `ocean_theme.tres` 按钮样式重做：
+  - 普通态：贝壳白底色 + 海蓝色边框，圆角半径 16（胶囊形），带 4px 柔和投影。
+  - 悬停态：海沫蓝底色 + 珊瑚粉边框，投影加深。
+  - 按下态：海蓝色底色 + 深海蓝边框，白字，投影收缩，呈现按下凹陷感。
+  - 禁用态：灰蓝色扁平样式。
+  - 聚焦态：透明底 + 珊瑚粉边框。
+  - 同步更新了 `MenuButton`、`PanelContainer`、`PopupMenu`、`LineEdit` 的圆角、边框与投影，使整体风格统一。
+  - 文字默认色改为深海蓝 `Color(0.15, 0.28, 0.38)`。
+  - `BoardPanel` 自定义类型样式改为全透明，使棋盘区域不再显示沙滩色，完全融入浅蓝背景。
+  - `MenuBarPanel` 去掉边框并增加轻微投影，与新的按钮阴影风格协调。
+
+- `assets/classicPics/level3/normal/tile_01.png` ~ `tile_42.png`：
+  - 使用 PIL 批量处理，将 RGB 三通道均小于 30 的近黑色像素改为透明。
+  - 这样经典棋子的黑色背景被移除，露出下方浅色的格子底板，整体视觉与宝可梦图版更接近。
+
+- `game.tscn`：
+  - `BoardPanel` 样式由主题接管为透明，棋盘中间不再出现沙滩色块。
+
+**验证**：
+- 脚本检查 `game.tscn`、`cell.tscn`、`ocean_theme.tres` 的资源引用，无缺失。
+- 建议启动 Godot 后重点验证：
+  - 顶部菜单栏、暂停菜单、设置面板按钮的胶囊圆角与投影是否正常。
+  - 切换到经典图版时棋子是否不再呈现黑色方块。
+  - 棋盘区域是否与背景一样是浅蓝色，没有中间的沙滩色底板。
+
+### 20. 修复经典棋子去黑底导致的画质损伤
+
+**时间**：2026-07-01  
+**涉及文件**：`classic_tile.gdshader`（新增）、`cell.gd`、`assets/classicPics/level3/normal/tile_*.png`
+
+**原因**：第 19 步用 PIL 直接把经典棋子 PNG 的黑底像素改为透明，结果去掉了图案的暗部抗锯齿边缘，导致棋子看起来“画质损伤、图案不清晰”。
+
+**改动**：
+
+- `assets/classicPics/level3/normal/tile_*.png`：
+  - 通过 `git checkout HEAD -- assets/classicPics/level3/normal/` 恢复为原始文件，不再修改素材。
+
+- 新增 `classic_tile.gdshader`：
+  - 使用 Godot CanvasItem Shader，在渲染时根据像素亮度把深色背景平滑地变为透明。
+  - `brightness < 0.10` 完全透明，`brightness > 0.18` 保持原样，中间用 `smoothstep` 过渡，保留原始 PNG 的抗锯齿细节。
+
+- `cell.gd`：
+  - 新增常量 `CLASSIC_TILE_SHADER` 预加载 `classic_tile.gdshader`。
+  - 新增静态变量 `_classic_material`，所有经典图版格子共用同一个 `ShaderMaterial`。
+  - 修改 `update_icon()`：
+    - 当 `current_skin == TileSkin.CLASSIC` 时，为 `TextureRect` 赋 `_classic_material`。
+    - 当切回宝可梦图版时，把 `material` 置空，避免影响宝可梦棋子。
+    - 空白格也同步清空 `material`。
+
+**验证**：
+- 静态资源引用检查通过。
+- 由于当前环境无 Godot，建议在编辑器里切换到经典图版后观察：棋子边缘是否平滑、图案细节是否清晰、黑底是否已去除。
+
+### 21. 用连通域（flood fill）重新去除经典棋子黑底
+
+**时间**：2026-07-01  
+**涉及文件**：`assets/classicPics/level3/normal/tile_*.png`、`cell.gd`、`classic_tile.gdshader`（删除）
+
+**原因**：第 20 步使用 Shader 在渲染时按亮度去除黑底，结果把棋子本身的深色部分也一起变透明了，用户反馈“图案都看不清晰”。需要改用不损伤图案本体的方法重新处理有黑底的原始素材。
+
+**改动**：
+
+- `cell.gd`：
+  - 删除 `CLASSIC_TILE_SHADER` 常量、`_classic_material` 静态变量以及 `update_icon()` 中根据皮肤设置 ShaderMaterial 的逻辑。
+  - 恢复为最直接的纹理显示方式，不再依赖 Shader。
+
+- `classic_tile.gdshader`：
+  - 删除该文件及其 `.uid` 缓存。
+
+- `assets/classicPics/level3/normal/tile_*.png`：
+  - 这些文件在第 20 步已恢复为原始黑底版本，现在用 Python + PIL + numpy 重新批量处理：
+    1. **连通域识别背景**：从图像四边开始 flood fill，只把与边界相连、且亮度 < 35 的像素标记为背景。这样即使图标内部有深色像素，只要它不连到边界，就会被保留。
+    2. **背景完全透明**：被标记为背景的像素 alpha 设为 0。
+    3. **边缘平滑过渡**：对非背景但亮度 < 90 的边界像素，按亮度线性计算 alpha，使锯齿感更弱。
+  - 处理了 `tile_01.png` 到 `tile_42.png` 共 42 张。
+
+**验证**：
+- 随机抽查处理后的 `tile_01.png`、`tile_02.png`、`tile_04.png`、`tile_07.png`，图标主体颜色保留完整，黑色背景已去除。
+- 静态资源引用检查通过。
+- 建议启动 Godot 后切换到经典图版，重点观察：
+  - 棋子图案是否清晰、颜色是否完整。
+  - 黑底是否已去除。
+  - 边缘是否还有明显锯齿。
+
+### 22. 修复菜单栏按钮悬停时文字截断
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`
+
+**原因**：用户反馈菜单栏的“游戏 / 选项 / 帮助 / 图版”四个 `MenuButton` 在鼠标悬停时，由于 hover 样式增加了 2px 边框，而 normal 样式边框为 0，导致按钮宽度不足以容纳内容，第二个字显示不全。
+
+**改动**：
+- 在 `ocean_theme.tres` 的 `StyleBoxFlat_menu_normal`、`StyleBoxFlat_menu_hover`、`StyleBoxFlat_menu_pressed` 中分别增加：
+  - `content_margin_left = 10`
+  - `content_margin_right = 10`
+- 这样每个菜单按钮左右各增加 10 像素内容边距，hover 态的边框不会挤压文字区域，文字可以完整显示。
+
+**验证**：
+- 静态资源引用检查通过。
+- 建议启动 Godot 后将鼠标移到菜单栏四个选项上，确认悬停时“游戏”“选项”“帮助”“图版”四个字均完整显示。
+
+### 23. 回退一行按钮改回方形
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`、`game.tscn`
+
+**原因**：用户希望顶部工具栏（回退、前进、暂停、重新开始本局、提示、洗牌）的按钮从胶囊形改回方形，而暂停菜单、设置面板等其它按钮保持胶囊形。
+
+**改动**：
+
+- `ocean_theme.tres`：
+  - 新增 5 个 `StyleBoxFlat_toolbar_button_*` 子资源，颜色/阴影与现有胶囊按钮一致，但 `corner_radius` 从 16 改为 6，呈现圆角方形。
+  - 新增自定义主题类型 `ToolbarButton`，基础类型为 `Button`，并绑定上述方形样式与字体颜色。
+  - `load_steps` 从 18 调整为 23。
+
+- `game.tscn`：
+  - 为 `UndoButton`、`RedoButton`、`PauseButton`、`RestartButton`、`HintButton`、`ShuffleButton` 分别添加 `theme_type_variation = "ToolbarButton"`。
+
+**验证**：
+- 静态资源引用检查通过。
+- 建议启动 Godot 后确认：顶部六个按钮为方形，暂停菜单和设置面板内的按钮仍为胶囊形。
+
+### 24. 统一菜单栏及下拉菜单文字颜色
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`
+
+**原因**：用户反馈菜单栏中“选项”等按钮的文字颜色与“游戏”不一致，要求统一。
+
+**改动**：
+
+- `ocean_theme.tres`：
+  - `MenuButton/colors/font_pressed_color` 从白色改回深海蓝 `Color(0.15, 0.28, 0.38, 1)`，与 `font_color`、`font_hover_color` 保持一致。
+  - `StyleBoxFlat_menu_pressed` 底色从海蓝改为海沫蓝，确保深蓝文字在按下态仍有足够对比度。
+  - 新增 `StyleBoxFlat_popup_hover` 子资源，作为下拉菜单项的悬停高亮背景（海沫蓝、小圆角）。
+  - 为 `PopupMenu` 设置字体颜色：
+    - 普通 / 悬停 / 按下：深海蓝
+    - 禁用 / 快捷键：灰蓝色
+  - `load_steps` 从 23 调整为 24。
+
+**验证**：
+- 静态资源引用检查通过。
+- 建议启动 Godot 后观察：
+  - 菜单栏四个按钮在常态、悬停、按下态文字均为同一深海蓝色。
+  - 点击“选项”“游戏”等打开下拉菜单后，菜单项文字颜色与菜单栏按钮文字一致。
+
+### 25. 移除所有按钮与棋子的边框
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`、`cell.tscn`
+
+**原因**：用户希望所有按钮和棋子（格子）都不要有边框色。
+
+**改动**：
+
+- `ocean_theme.tres`：
+  - 移除 `Button`（胶囊按钮）、`ToolbarButton`（方形工具栏按钮）、`MenuButton`（菜单栏按钮）所有状态样式中的 `border_width_*` 和 `border_color`。
+  - 焦点态（focus）原本靠边框指示焦点，去掉边框后改为半透明珊瑚色背景 `Color(1, 0.65, 0.7, 0.35)`，确保焦点仍然可见。
+  - 面板（PanelContainer、PopupMenu）、输入框（LineEdit）、进度条、滑块等非按钮组件保留原有边框，未作改动。
+
+- `cell.tscn`：
+  - 移除格子 `StyleBoxFlat_gwrgs` 中的 `border_width_*` 和 `border_color`，棋子背面改为无边框圆角矩形。
+
+**验证**：
+- 静态资源引用检查通过。
+- 建议启动 Godot 后确认：
+  - 顶部工具栏按钮、暂停菜单按钮、设置面板按钮、菜单栏按钮均无可见边框。
+  - 棋盘上的棋子格子没有边框线。
+
+### 26. 分数数字改为醒目主题色
+
+**时间**：2026-07-01  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望分数标签中“分数：”后面的数字使用更醒目的主题色。
+
+**改动**：
+
+- `game.tscn`：
+  - 将 `ScoreLabel` 从 `Label` 改为 `RichTextLabel`。
+  - 启用 `bbcode_enabled`，设置 `fit_content = true`、`scroll_active = false`、`autowrap_mode = 0`，并给出默认文本 `[color=#D4A373]分数：[/color][color=#FF8B94]0[/color]`。
+
+- `game.gd`：
+  - `@onready var score_label` 类型从 `Label` 改为 `RichTextLabel`。
+  - `_update_score_label()` 改用 BBCode：前缀“分数：”使用喙褐色 `#D4A373`，数字使用醒目的浅粉红 `#FF8B94`（主题危险色）。
+  - 分数强调动画（`_emphasize_score_label`）保持不变，通过 `modulate` 给整个标签做闪烁后恢复白色。
+
+**验证**：
+- 静态资源引用检查通过。
+- 建议启动 Godot 后消除棋子，观察分数标签：前缀为喙褐色，数字为亮粉色，加分动画正常。
+
+### 27. 统一加深主题中的浅蓝、浅粉、浅褐色
+
+**时间**：2026-07-01  
+**涉及文件**：`ocean_theme.tres`（重新生成）、`game.tscn`、`game.gd`、`cell.tscn`
+
+**原因**：用户反馈当前主题里用到的浅蓝、浅粉、浅褐颜色太浅，希望统一加深一点。
+
+**改动**：
+
+- `ocean_theme.tres`：
+  - 重新生成整个主题文件，避免之前颜色调整脚本造成的重复加深和透明色被误改问题。
+  - 所有浅蓝、浅粉、浅褐色统一乘以 0.88 加深一次：
+    - 浅海蓝 `#7EC8E3` → `#5AB4E0`
+    - 海沫蓝 → 对应加深
+    - 珊瑚粉 `#FFB6B9` → `#E08787`
+    - 危险粉红 `#FF8B94` → `#E07A82`
+    - 海鸟喙褐 `#D4A373` → `#BB8F65`
+  - 纯白、透明、深色文字、阴影等颜色保持不变。
+
+- `game.tscn`：
+  - 背景、暂停大字、提示线、弹窗遮罩等 Color 值同步加深。
+  - 默认文本中的 `#FFFF00`、`#6C5CD1`、`#32CD32` 等替换为新的主题色 `#BB8F65`、`#5AB4E0`、`#FFF8F0`。
+  - `ScoreLabel` 默认文本颜色同步为 `#BB8F65` / `#E07A82`。
+
+- `game.gd`：
+  - 难度/关卡/时间/分数等 BBCode 颜色更新为加深后的主题色。
+  - 分数强调动画颜色更新为加深后的珊瑚粉。
+
+- `cell.tscn`：
+  - 选中高亮 `SelectionHighlight` 颜色更新为加深后的珊瑚粉 `Color(0.88, 0.628, 0.638, 0.45)`。
+  - 格子底色保持贝壳白，未加深。
+
+**验证**：
+- 静态资源引用检查通过。
+- 建议启动 Godot 后整体观察：背景、菜单栏、按钮、进度条、分数、棋子选中效果是否都比之前深一点点，且没有明显偏色。

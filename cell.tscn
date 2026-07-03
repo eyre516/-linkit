@@ -5,11 +5,7 @@
 [ext_resource type="Script" uid="uid://bx55232lcd1sp" path="res://cell.gd" id="2_gwrgs"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gwrgs"]
-bg_color = Color(1, 0.95, 0.7, 1)
-border_width_left = 0
-border_width_top = 0
-border_width_right = 0
-border_width_bottom = 0
+bg_color = Color(1, 0.973, 0.941, 1)
 
 [node name="Cell" type="PanelContainer"]
 custom_minimum_size = Vector2(48, 48)
@@ -39,6 +35,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(1, 0.8, 0.2, 0.35)
+color = Color(0.88, 0.628, 0.638, 0.45)
 
 [connection signal="gui_input" from="." to="." method="_on_gui_input"]
