@@ -1,8 +1,20 @@
-[gd_scene load_steps=13 format=3 uid="uid://clervudyy6xv"]
+[gd_scene load_steps=9 format=3 uid="uid://clervudyy6xv"]
 
 [ext_resource type="Script" uid="uid://yey3gxhknoih" path="res://game.gd" id="1_feb5d"]
 [ext_resource type="PackedScene" uid="uid://bm62ipt0ofqm7" path="res://cell.tscn" id="2_e2o6t"]
 [ext_resource type="Theme" uid="uid://c0a1b2c3d4e5f" path="res://ocean_theme.tres" id="3_ocean"]
+
+[sub_resource type="Gradient" id="Gradient_timer"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.9, 0.2, 0.2, 1, 1, 0.85, 0, 1, 0.2, 0.75, 0.25, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_timer"]
+gradient = SubResource("Gradient_timer")
+width = 320
+height = 16
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_timer_fill"]
+texture = SubResource("GradientTexture2D_timer")
 
 [sub_resource type="SystemFont" id="SystemFont_pause"]
 font_weight = 800
@@ -10,21 +22,7 @@ font_weight = 800
 [sub_resource type="LabelSettings" id="LabelSettings_pause"]
 font = SubResource("SystemFont_pause")
 font_size = 140
-font_color = Color(0.880, 0.480, 0.510, 0.900)
-
-[sub_resource type="Gradient" id="Gradient_timer"]
-colors = PackedColorArray(0.9, 0.2, 0.2, 1.0, 1.0, 0.85, 0.0, 1.0, 0.2, 0.75, 0.25, 1.0)
-offsets = PackedFloat32Array(0.0, 0.5, 1.0)
-
-[sub_resource type="GradientTexture2D" id="GradientTexture2D_timer"]
-gradient = SubResource("Gradient_timer")
-fill_from = Vector2(0, 0)
-fill_to = Vector2(1, 0)
-width = 320
-height = 16
-
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_timer_fill"]
-texture = SubResource("GradientTexture2D_timer")
+font_color = Color(0.88, 0.48, 0.51, 0.9)
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -33,8 +31,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_feb5d")
 theme = ExtResource("3_ocean")
+script = ExtResource("1_feb5d")
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -61,7 +59,7 @@ grow_vertical = 2
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "MenuBarPanel"
+theme_type_variation = &"MenuBarPanel"
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/MenuBar"]
 custom_minimum_size = Vector2(0, 40)
@@ -126,12 +124,12 @@ autowrap_mode = 0
 custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "MenuBarPanel"
+theme_type_variation = &"MenuBarPanel"
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/InfoBar"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
+alignment = 1
 
 [node name="DifficultyLabel" type="RichTextLabel" parent="VBoxContainer/InfoBar/HBoxContainer"]
 unique_name_in_owner = true
@@ -174,57 +172,57 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 16)
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_styles/fill = SubResource("StyleBoxTexture_timer_fill")
 max_value = 60.0
 value = 60.0
-theme_override_styles/fill = SubResource("StyleBoxTexture_timer_fill")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 size_flags_vertical = 0
-alignment = 1
 theme_override_constants/separation = 10
+alignment = 1
 
 [node name="UndoButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "ToolbarButton"
+theme_type_variation = &"ToolbarButton"
 text = "↩ 回退"
 
 [node name="RedoButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "ToolbarButton"
+theme_type_variation = &"ToolbarButton"
 text = "↪ 前进"
 
 [node name="PauseButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "ToolbarButton"
+theme_type_variation = &"ToolbarButton"
 text = "⏸ 暂停"
 
 [node name="HintButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "ToolbarButton"
+theme_type_variation = &"ToolbarButton"
 text = "💡 提示"
 
 [node name="ShuffleButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "ToolbarButton"
+theme_type_variation = &"ToolbarButton"
 text = "🔀 洗牌"
 
 [node name="RestartButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = "ToolbarButton"
+theme_type_variation = &"ToolbarButton"
 text = "🔄 重开"
 
 [node name="BoardCenter" type="CenterContainer" parent="VBoxContainer"]
@@ -236,7 +234,7 @@ size_flags_vertical = 3
 
 [node name="BoardPanel" type="PanelContainer" parent="VBoxContainer/BoardCenter"]
 layout_mode = 2
-theme_type_variation = "BoardPanel"
+theme_type_variation = &"BoardPanel"
 
 [node name="AspectRatioContainer" type="AspectRatioContainer" parent="VBoxContainer/BoardCenter/BoardPanel"]
 unique_name_in_owner = true
@@ -594,8 +592,8 @@ theme_override_constants/separation = 12
 
 [node name="TabRow" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
+alignment = 1
 
 [node name="LeaderboardTab1" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel/TabRow"]
 unique_name_in_owner = true
@@ -619,19 +617,19 @@ text = "高级"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(900, 500)
 layout_mode = 2
+theme_override_font_sizes/normal_font_size = 32
+theme_override_font_sizes/bold_font_size = 32
+theme_override_font_sizes/mono_font_size = 32
 bbcode_enabled = true
 text = "暂无记录"
 fit_content = true
 scroll_active = false
 horizontal_alignment = 1
-theme_override_font_sizes/normal_font_size = 32
-theme_override_font_sizes/bold_font_size = 32
-theme_override_font_sizes/mono_font_size = 32
 
 [node name="PaginationRow" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 16
+alignment = 1
 
 [node name="PrevPageButton" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel/PaginationRow"]
 unique_name_in_owner = true
@@ -662,7 +660,7 @@ text = "关闭"
 [node name="HintLine" type="Line2D" parent="CanvasLayer"]
 unique_name_in_owner = true
 width = 4.0
-default_color = Color(0.880, 0.628, 0.638, 1)
+default_color = Color(0.88, 0.628, 0.638, 1)
 
 [node name="PauseLabel" type="Label" parent="CanvasLayer"]
 unique_name_in_owner = true
