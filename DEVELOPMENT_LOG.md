@@ -703,3 +703,233 @@ cd assets/连连看例子
 **验证**：
 - 静态资源引用检查通过。
 - 建议启动 Godot 后整体观察：背景、菜单栏、按钮、进度条、分数、棋子选中效果是否都比之前深一点点，且没有明显偏色。
+
+---
+
+### 28. 顶部信息栏重新排版
+
+**时间**：2026-07-03  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：原 `MenuBar` 同时塞入菜单、难度/关卡标签和倒计时进度条，层级混乱；进度条固定 320px 宽度在小屏幕上会被挤压；且进度条全程红色，无法体现时间紧迫感的变化。
+
+**改动**：
+
+- `game.tscn`：
+  - `MenuBar` 仅保留左侧菜单（游戏 / 选项 / 帮助 / 图版）和右侧总用时 / 分数标签。
+  - 新增 `InfoBar`（第三行），从左到右依次放置难度、关卡、剩余对数、倒计时进度条。
+  - 按钮行（第二行）重新排序为：回退 / 前进 / 暂停 / 提示 / 洗牌 / 重新开始本局，并移除总用时 / 分数标签。
+  - `TimerBar` 移至 `InfoBar`，`size_flags_horizontal = 3` 让其自适应剩余宽度，`custom_minimum_size.x` 从 320 降为 120，避免小屏幕挤压。
+  - 为 `TimerBar` 新增 `Gradient` + `GradientTexture2D` + `StyleBoxTexture` 资源，填充样式改为绿 → 黄 → 红渐变，替代原本的单色红色。
+
+- `game.gd`：
+  - 新增 `@onready var remaining_pairs_label: RichTextLabel = %RemainingPairsLabel` 引用。
+  - 新增 `_update_pairs_label()` 用于刷新“剩余：X”文本。
+  - `_update_level_info()` 末尾调用 `_update_pairs_label()`，确保换关/换难度时同步更新。
+  - 消除成功后调用 `_update_pairs_label()`，实时反映剩余对数变化。
+  - `_update_timer_bar()` 增加最后 10 秒脉冲逻辑：当 `remaining_time <= 10` 且游戏处于运行状态时，启动循环 Tween 改变 `modulate` 产生亮度脉冲；否则停止 Tween 并恢复白色。
+  - `_process()` 中改为调用 `_update_timer_bar()`，保证每帧都能正确启停脉冲。
+  - `_set_paused()` 末尾调用 `_update_timer_bar()`，暂停/继续时及时停止或恢复脉冲。
+
+**验证**：
+
+- 静态资源引用与节点路径检查通过。
+- 建议启动 Godot 后观察：
+  - 顶层菜单栏右侧仅显示总用时与分数。
+  - 第二行按钮顺序为回退 / 前进 / 暂停 / 提示 / 洗牌 / 重开。
+  - 第三行信息栏显示难度、关卡、剩余对数，进度条随窗口宽度自适应。
+  - 倒计时进度条颜色从绿色平滑过渡到黄色再到红色；剩余 10 秒时进度条开始闪烁脉冲；暂停时脉冲停止。
+
+**修复**：
+- `game.tscn` 中 `Gradient` 子资源 `colors` 属性最初写成 `PackedColorArray(Color(...), Color(...), Color(...))`，Godot 4.5 的 tscn 解析器报 `Expected float in constructor`。
+- 已改为扁平浮点数数组：`PackedColorArray(0.2, 0.75, 0.25, 1.0, 1.0, 0.85, 0.0, 1.0, 0.9, 0.2, 0.2, 1.0)`，场景可正常加载运行。
+
+### 29. 调整顶部三行顺序
+
+**时间**：2026-07-03  
+**涉及文件**：`game.tscn`
+
+**原因**：用户希望难度/关卡/剩余对数/倒计时进度条位于菜单栏下方（第二行），功能按钮放在第三行。
+
+**改动**：
+- 在 `VBoxContainer` 中交换 `InfoBar` 与按钮行 `HBoxContainer` 的节点顺序。
+- 现在从上到下依次为：`MenuBar` → `InfoBar`（难度、关卡、剩余、倒计时） → 按钮行（回退、前进、暂停、提示、洗牌、重开） → `BoardCenter`。
+
+**验证**：
+- Godot 4.5.1 命令行 `--headless --quit` 可正常加载并打印 `game started!`。
+
+### 30. 为功能按钮添加 Unicode 图标并简化文字
+
+**时间**：2026-07-03  
+**涉及文件**：`game.tscn`
+
+**原因**：纯文字按钮显得压迫感较强，用户希望用 Unicode 符号作为图标，并缩短“重新开始本局”为“重开”。
+
+**改动**：
+- 按钮行高度从 50 提高到 64，为两行内容留出空间。
+- 所有功能按钮文字改为“图标 + 换行 + 文字”：
+  - 回退：`↩\n回退`
+  - 前进：`↪\n前进`
+  - 暂停：`⏸\n暂停`
+  - 提示：`💡\n提示`
+  - 洗牌：`🔀\n洗牌`
+  - 重开：`🔄\n重开`（原“重新开始本局”）
+
+**验证**：
+- Godot 4.5.1 命令行 `--headless --quit` 可正常加载并打印 `game started!`。
+- 建议启动 Godot 后观察各按钮是否能正确显示 Unicode 图标与文字；若系统字体不支持某些符号，可改用图片图标。
+
+### 31. 按钮图标与文字改为同一行
+
+**时间**：2026-07-03  
+**涉及文件**：`game.tscn`
+
+**原因**：用户希望图标和文字在同一行显示，避免换行造成按钮过高。
+
+**改动**：
+- 按钮行高度从 64 恢复为 50。
+- 所有功能按钮文字由“图标 + 换行 + 文字”改为“图标 + 空格 + 文字”：
+  - 回退：`↩ 回退`
+  - 前进：`↪ 前进`
+  - 暂停：`⏸ 暂停`
+  - 提示：`💡 提示`
+  - 洗牌：`🔀 洗牌`
+  - 重开：`🔄 重开`
+
+**验证**：
+- Godot 4.5.1 命令行 `--headless --quit` 可正常加载并打印 `game started!`。
+
+### 32. 修复倒计时进度条红绿方向
+
+**时间**：2026-07-03  
+**涉及文件**：`game.tscn`
+
+**原因**：用户反馈倒计时进度条红绿色反了，希望时间充裕时偏绿、时间紧迫时偏红。
+
+**改动**：
+- `Gradient_timer` 的颜色顺序从“绿 → 黄 → 红”反转为“红 → 黄 → 绿”。
+- ProgressBar 会根据当前 `value` 裁剪/缩放填充纹理：
+  - 剩余时间多（`value` 接近满）时显示右侧绿色区域。
+  - 剩余时间少（`value` 低）时只显示左侧红色区域。
+
+**验证**：
+- Godot 4.5.1 命令行 `--headless --quit` 可正常加载并打印 `game started!`。
+- 建议启动 Godot 后观察：倒计时接近 60 秒时进度条主体偏绿，接近 0 秒时偏红。
+
+### 33. 调整顶部信息栏文字颜色
+
+**时间**：2026-07-03  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望第二行（InfoBar）的浅蓝色数字改为与“游戏”菜单文字同色，第一行和第二行的浅橘色前缀改为褐色。
+
+**改动**：
+- 新增颜色：
+  - “游戏”二字颜色：`Color(0.150, 0.280, 0.380, 1)`（`#264D61`，深蓝绿）。
+  - 褐色：`Color(0.55, 0.36, 0.20, 1)`（`#8C5C33`）。
+- `game.tscn`：
+  - `TimeLabel`、`ScoreLabel` 前缀 `#BB8F65` → `#8C5C33`。
+  - `DifficultyLabel`、`LevelLabel`、`RemainingPairsLabel` 前缀 `#BB8F65` → `#8C5C33`，数字 `#5AB4E0` → `#264D61`。
+- `game.gd`：
+  - `_update_level_info()` 中难度、关卡标签的前缀和数字颜色同步替换。
+  - `_update_pairs_label()` 中“剩余：”前缀和数字颜色同步替换。
+  - `_update_time_labels()` 中总用时/本关用时的前缀颜色替换。
+  - `_update_score_label()` 中“分数：”前缀颜色替换。
+- 弹窗内容中的快捷键说明颜色（`#5AB4E0`）保持不变，不属于顶部一二行。
+
+**验证**：
+- Godot 4.5.1 命令行 `--headless --quit` 可正常加载并打印 `game started!`。
+- 建议启动 Godot 后观察：第一行和第二行的前缀文字呈褐色，第二行的数字与“游戏”菜单文字同色。
+
+---
+
+### 34. 排行榜分难度标签页与分页显示
+
+**时间**：2026-07-04  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望排行榜按初级 / 中级 / 高级分成三个可切换的标签页，并且每个难度下的成绩可以分页浏览。
+
+**改动**：
+
+- `game.tscn`：
+  - 在 `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer` 下新增 `LeaderboardPanel`（默认隐藏）：
+    - `TabRow`：三个按钮 `LeaderboardTab1/2/3`，分别显示“初级 / 中级 / 高级”。
+    - `LeaderboardContent`：`RichTextLabel`，用于显示当前难度当前页的成绩列表。
+    - `PaginationRow`：`PrevPageButton`、`LeaderboardPageLabel`、`NextPageButton`。
+    - `LeaderboardCloseButton`：关闭排行榜弹窗。
+
+- `game.gd`：
+  - 常量调整：
+    - `LEADERBOARD_MAX_ENTRIES` 从 `10` 改为 `1000`，以支持多页记录。
+    - 新增 `LEADERBOARD_ENTRIES_PER_PAGE := 10`。
+  - 新增状态：`_leaderboard_difficulty`、`_leaderboard_page`。
+  - 新增 `@onready` 引用：`leaderboard_panel`、`leaderboard_content`、`leaderboard_page_label`、`leaderboard_close_button`、`leaderboard_tab_buttons`、`leaderboard_prev_button`、`leaderboard_next_button`。
+  - 在 `_ready()` 中连接排行榜标签页、翻页、关闭按钮信号，并设置所有新按钮 `focus_mode = FOCUS_NONE`。
+  - 将 `_get_leaderboard_text(difficulty)` 改为 `_get_leaderboard_page_text(difficulty, page)`，仅格式化指定页的记录。
+  - 新增 `_show_leaderboard_dialog()`：打开排行榜时默认显示初级第 1 页。
+  - 新增 `_update_leaderboard_view()`：根据当前难度与页码刷新内容、页码标签、标签按钮禁用状态、翻页按钮可用状态。
+  - 新增 `_on_leaderboard_tab_pressed(difficulty)`：切换难度并重置到第 1 页。
+  - 新增 `_on_leaderboard_prev_page_pressed()` / `_on_leaderboard_next_page_pressed()`：翻页并刷新视图。
+  - 修改 `_on_options_menu_item_pressed()` 中“排行榜”分支，改为调用 `_show_leaderboard_dialog()`。
+  - 修改 `_show_custom_dialog()`：当类型为 `LEADERBOARD` 时隐藏通用 `DialogContent`/`DialogHint`，显示 `LeaderboardPanel`；其他类型则恢复通用内容并隐藏排行榜面板。
+  - 修改 `_hide_custom_dialog()`：关闭弹窗时同时隐藏 `LeaderboardPanel`。
+  - 修改 `_input()`：排行榜弹窗打开时不响应全局的“按任意键/点击关闭”，让按钮自己处理输入。
+
+**验证**：
+- 静态检查节点引用与 GDScript 语法，未发现明显错误。
+- 当前环境未安装 Godot，建议启动 Godot 后验证：
+  - 点击「选项 → 排行榜」弹出排行榜弹窗，默认显示初级第 1 页。
+  - 点击「中级 / 高级」标签可切换难度，页码重置为第 1 页。
+  - 当某难度记录超过 10 条时，「下一页」可用，页码显示正确。
+  - 点击「关闭」按钮或弹窗外部区域可关闭排行榜并恢复游戏。
+
+---
+
+### 35. 放大排行榜字体
+
+**时间**：2026-07-04  
+**涉及文件**：`game.tscn`
+
+**原因**：用户反馈排行榜成绩文字太小，希望参考游戏内字体放大。
+
+**改动**：
+- `LeaderboardContent`：
+  - `custom_minimum_size` 从 `Vector2(900, 450)` 调整为 `Vector2(900, 500)`，为放大后的文字留出足够空间。
+  - 新增 `theme_override_font_sizes/normal_font_size = 32`
+  - 新增 `theme_override_font_sizes/bold_font_size = 32`
+  - 新增 `theme_override_font_sizes/mono_font_size = 32`
+  - 这样标题（`[b]`）、表格正文（`[code]`）和“暂无记录”都使用 32 号字体，与弹窗内容区 `DialogContent` 的字体大小一致。
+- 排行榜分页与关闭按钮文字统一放大到 32：
+  - `PrevPageButton`：`28` → `32`
+  - `LeaderboardPageLabel`：`28` → `32`
+  - `NextPageButton`：`28` → `32`
+  - `LeaderboardCloseButton`：`30` → `32`
+
+**验证**：
+- 静态检查节点属性，无引用错误。
+- 建议启动 Godot 后打开排行榜，观察成绩列表、页码、按钮文字是否与游戏内弹窗文字大小一致。
+
+---
+
+### 36. 排行榜列严格对齐表头
+
+**时间**：2026-07-04  
+**涉及文件**：`game.gd`
+
+**原因**：用户反馈排行榜每一列的数据没有和最上面的“排名 / 姓名 / 日期 / 用时 / 分数”表头严格对齐。
+
+**改动**：
+- 重写 `_get_leaderboard_page_text()` 中的表格生成逻辑：
+  - 原先使用空格 + `[code]` 手动模拟表格，表头和数据行的格式字符串列宽不一致，导致错位。
+  - 改为使用 RichTextLabel 原生 `[table=5]` 标签：
+    - 表头单独一行，5 个单元格分别显示“排名 / 姓名 / 日期 / 用时 / 分数”，并保留原来的金色加粗样式。
+    - 每个成绩作为一行，5 个单元格与表头列一一对应。
+    - 表格整体包在 `[center]` 中居中显示。
+  - 这样每列宽度由该列最宽内容自动决定，数据列会严格与表头列对齐，不再依赖空格估算。
+
+**验证**：
+- 静态检查 GDScript 语法与节点引用，未发现明显错误。
+- 建议启动 Godot 后打开排行榜，观察：
+  - “排名 / 姓名 / 日期 / 用时 / 分数”五个表头是否各自与下方数据在同一垂直线上。
+  - 切换不同难度、翻页后是否仍然保持对齐。

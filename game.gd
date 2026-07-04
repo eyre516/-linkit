@@ -132,6 +132,7 @@ var _hint_active: bool = false
 var _timer_running: bool = false
 var _is_paused: bool = false
 var _is_animating: bool = false
+var _timer_pulse_tween: Tween = null
 
 # 鼠标按键状态（用于左右键同时按下的洗牌快捷键）
 var _left_mouse_pressed: bool = false
@@ -154,7 +155,12 @@ var current_difficulty: int = 1
 # 排行榜数据：键为难度 "1"/"2"/"3"，值为记录数组
 var _leaderboard_data: Dictionary = {}
 const LEADERBOARD_FILE := "user://leaderboard.json"
-const LEADERBOARD_MAX_ENTRIES := 10
+
+# 排行榜弹窗当前查看的难度与页码（0 起始）
+var _leaderboard_difficulty: int = 1
+var _leaderboard_page: int = 0
+const LEADERBOARD_MAX_ENTRIES := 1000
+const LEADERBOARD_ENTRIES_PER_PAGE := 10
 const SETTINGS_FILE := "user://settings.json"
 
 # 关卡完成弹窗待进入的下一关
@@ -190,6 +196,7 @@ var _bgm_player: AudioStreamPlayer
 @onready var score_label: RichTextLabel = %ScoreLabel
 @onready var difficulty_label: RichTextLabel = %DifficultyLabel
 @onready var level_label: RichTextLabel = %LevelLabel
+@onready var remaining_pairs_label: RichTextLabel = %RemainingPairsLabel
 @onready var timer_bar: ProgressBar = %TimerBar
 @onready var grid_container: GridContainer = %GridContainer
 @onready var aspect_ratio_container: AspectRatioContainer = %AspectRatioContainer
@@ -222,6 +229,14 @@ var _bgm_player: AudioStreamPlayer
 @onready var dialog_hint: Label = %DialogHint
 @onready var dialog_name_input: LineEdit = %DialogNameInput
 
+@onready var leaderboard_panel: VBoxContainer = %LeaderboardPanel
+@onready var leaderboard_content: RichTextLabel = %LeaderboardContent
+@onready var leaderboard_page_label: Label = %LeaderboardPageLabel
+@onready var leaderboard_close_button: Button = %LeaderboardCloseButton
+@onready var leaderboard_tab_buttons: Array[Button] = [%LeaderboardTab1, %LeaderboardTab2, %LeaderboardTab3]
+@onready var leaderboard_prev_button: Button = %PrevPageButton
+@onready var leaderboard_next_button: Button = %NextPageButton
+
 
 # 模块：生命周期 —— 初始化音频、棋盘、菜单与游戏
 func _ready() -> void:
@@ -248,6 +263,14 @@ func _ready() -> void:
 	dialog_name_input.text_submitted.connect(_on_name_input_submitted)
 	shuffle_button.pressed.connect(_on_shuffle_button_pressed)
 	pause_button.pressed.connect(_toggle_pause)
+
+	# 排行榜弹窗按钮
+	leaderboard_tab_buttons[0].pressed.connect(_on_leaderboard_tab_pressed.bind(1))
+	leaderboard_tab_buttons[1].pressed.connect(_on_leaderboard_tab_pressed.bind(2))
+	leaderboard_tab_buttons[2].pressed.connect(_on_leaderboard_tab_pressed.bind(3))
+	leaderboard_prev_button.pressed.connect(_on_leaderboard_prev_page_pressed)
+	leaderboard_next_button.pressed.connect(_on_leaderboard_next_page_pressed)
+	leaderboard_close_button.pressed.connect(_hide_custom_dialog)
 
 	# 暂停菜单按钮
 	%ResumeButton.pressed.connect(_on_resume_button_pressed)
@@ -277,6 +300,12 @@ func _ready() -> void:
 	%RestartButton2.focus_mode = Control.FOCUS_NONE
 	%SettingsButton.focus_mode = Control.FOCUS_NONE
 	%CloseSettingsButton.focus_mode = Control.FOCUS_NONE
+	%LeaderboardTab1.focus_mode = Control.FOCUS_NONE
+	%LeaderboardTab2.focus_mode = Control.FOCUS_NONE
+	%LeaderboardTab3.focus_mode = Control.FOCUS_NONE
+	%PrevPageButton.focus_mode = Control.FOCUS_NONE
+	%NextPageButton.focus_mode = Control.FOCUS_NONE
+	%LeaderboardCloseButton.focus_mode = Control.FOCUS_NONE
 
 	# 加载持久化设置
 	_load_settings()
@@ -293,9 +322,14 @@ func _update_level_info() -> void:
 		2: difficulty_name = "中级"
 		3: difficulty_name = "高级"
 	var level_total := 5 if current_difficulty == 1 else 10
-	difficulty_label.text = "[color=#BB8F65]难度：[/color][color=#5AB4E0]%s[/color]" % difficulty_name
-	level_label.text = "[color=#BB8F65]关卡 %d/%d：[/color][color=#5AB4E0]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
+	difficulty_label.text = "[color=#8C5C33]难度：[/color][color=#264D61]%s[/color]" % difficulty_name
+	level_label.text = "[color=#8C5C33]关卡 %d/%d：[/color][color=#264D61]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
+	_update_pairs_label()
 
+
+# 刷新剩余对数显示
+func _update_pairs_label() -> void:
+	remaining_pairs_label.text = "[color=#8C5C33]剩余：[/color][color=#264D61]%d[/color]" % pairs_left
 
 
 
@@ -469,8 +503,8 @@ func _add_leaderboard_entry(player_name: String) -> void:
 		entries.resize(LEADERBOARD_MAX_ENTRIES)
 
 
-# 模块：排行榜 —— 格式化排行榜字符串
-func _get_leaderboard_text(difficulty: int) -> String:
+# 模块：排行榜 —— 格式化指定难度与页码的排行榜字符串
+func _get_leaderboard_page_text(difficulty: int, page: int) -> String:
 	var key := str(difficulty)
 	var raw_entries = _leaderboard_data.get(key, [])
 	var entries: Array = raw_entries if raw_entries is Array else []
@@ -479,11 +513,79 @@ func _get_leaderboard_text(difficulty: int) -> String:
 	if entries.is_empty():
 		content += "[center]暂无记录[/center]"
 		return content
-	content += "[center][code]排名  姓名          日期              用时      分数[/code][/center]\n"
-	for i in range(entries.size()):
+
+	var total_pages := maxi(1, ceili(float(entries.size()) / LEADERBOARD_ENTRIES_PER_PAGE))
+	var current_page := clampi(page, 0, total_pages - 1)
+	var start_index := current_page * LEADERBOARD_ENTRIES_PER_PAGE
+	var end_index := mini(start_index + LEADERBOARD_ENTRIES_PER_PAGE, entries.size())
+
+	# 使用 RichTextLabel [table] 让各列自动与表头严格对齐
+	const HEADER_COLOR := "#E0B45A"
+	var table := "[center][table=5]"
+	table += "[cell][color=%s][b]排名[/b][/color][/cell]" % HEADER_COLOR
+	table += "[cell][color=%s][b]姓名[/b][/color][/cell]" % HEADER_COLOR
+	table += "[cell][color=%s][b]日期[/b][/color][/cell]" % HEADER_COLOR
+	table += "[cell][color=%s][b]用时[/b][/color][/cell]" % HEADER_COLOR
+	table += "[cell][color=%s][b]分数[/b][/color][/cell]" % HEADER_COLOR
+	for i in range(start_index, end_index):
 		var entry: Dictionary = entries[i]
-		content += "[center][code]%2d    %-12s  %-16s  %-8s  %d[/code][/center]\n" % [i + 1, entry["name"], entry["date"], entry["time"], entry["score"]]
+		table += "[cell]%d[/cell][cell]%s[/cell][cell]%s[/cell][cell]%s[/cell][cell]%d[/cell]" % [i + 1, entry["name"], entry["date"], entry["time"], entry["score"]]
+	table += "[/table][/center]\n"
+	content += table
 	return content
+
+
+# 模块：排行榜 —— 显示带标签页与分页的排行榜弹窗
+func _show_leaderboard_dialog() -> void:
+	_leaderboard_difficulty = 1
+	_leaderboard_page = 0
+	_update_leaderboard_view()
+	_show_custom_dialog(DialogType.LEADERBOARD, "排行榜", "")
+
+
+# 模块：排行榜 —— 刷新当前难度/页码的视图与按钮状态
+func _update_leaderboard_view() -> void:
+	var key := str(_leaderboard_difficulty)
+	var raw_entries = _leaderboard_data.get(key, [])
+	var entries: Array = raw_entries if raw_entries is Array else []
+	var total_pages := maxi(1, ceili(float(entries.size()) / LEADERBOARD_ENTRIES_PER_PAGE))
+	_leaderboard_page = clampi(_leaderboard_page, 0, total_pages - 1)
+
+	leaderboard_content.text = _get_leaderboard_page_text(_leaderboard_difficulty, _leaderboard_page)
+	leaderboard_page_label.text = "第 %d 页 / 共 %d 页" % [_leaderboard_page + 1, total_pages]
+
+	for i in range(leaderboard_tab_buttons.size()):
+		leaderboard_tab_buttons[i].disabled = (i + 1 == _leaderboard_difficulty)
+
+	leaderboard_prev_button.disabled = (_leaderboard_page == 0)
+	leaderboard_next_button.disabled = (_leaderboard_page >= total_pages - 1)
+
+
+# 模块：排行榜 —— 切换难度标签
+func _on_leaderboard_tab_pressed(difficulty: int) -> void:
+	if _leaderboard_difficulty == difficulty:
+		return
+	_leaderboard_difficulty = difficulty
+	_leaderboard_page = 0
+	_update_leaderboard_view()
+
+
+# 模块：排行榜 —— 上一页
+func _on_leaderboard_prev_page_pressed() -> void:
+	if _leaderboard_page > 0:
+		_leaderboard_page -= 1
+		_update_leaderboard_view()
+
+
+# 模块：排行榜 —— 下一页
+func _on_leaderboard_next_page_pressed() -> void:
+	var key := str(_leaderboard_difficulty)
+	var raw_entries = _leaderboard_data.get(key, [])
+	var entries: Array = raw_entries if raw_entries is Array else []
+	var total_pages := maxi(1, ceili(float(entries.size()) / LEADERBOARD_ENTRIES_PER_PAGE))
+	if _leaderboard_page < total_pages - 1:
+		_leaderboard_page += 1
+		_update_leaderboard_view()
 
 
 # 获取指定难度下的最大关卡数
@@ -833,12 +935,7 @@ func _on_options_menu_item_pressed(index: int) -> void:
 			_apply_settings_to_ui()
 			_save_settings()
 		5:
-			var lb_content := _get_leaderboard_text(1)
-			lb_content += "\n"
-			lb_content += _get_leaderboard_text(2)
-			lb_content += "\n"
-			lb_content += _get_leaderboard_text(3)
-			_show_custom_dialog(DialogType.LEADERBOARD, "排行榜", lb_content)
+			_show_leaderboard_dialog()
 
 
 # 处理主音量子菜单
@@ -957,9 +1054,19 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 	_current_dialog_type = type
 	_dialog_callback = callback
 	dialog_title.text = title
-	dialog_content.text = content
-	dialog_hint.text = hint
-	dialog_hint.modulate = Color.WHITE
+
+	if type == DialogType.LEADERBOARD:
+		dialog_content.hide()
+		dialog_hint.hide()
+		leaderboard_panel.show()
+	else:
+		dialog_content.show()
+		dialog_content.text = content
+		dialog_hint.show()
+		dialog_hint.text = hint
+		dialog_hint.modulate = Color.WHITE
+		leaderboard_panel.hide()
+
 	custom_dialog.show()
 	_set_paused(true, false)
 
@@ -975,6 +1082,7 @@ func _flash_dialog_hint() -> void:
 # 关闭自定义弹窗
 func _hide_custom_dialog() -> void:
 	custom_dialog.hide()
+	leaderboard_panel.hide()
 	_set_paused(false)
 	match _current_dialog_type:
 		DialogType.LEVEL_COMPLETE:
@@ -994,6 +1102,9 @@ func _input(event: InputEvent) -> void:
 	if custom_dialog.visible:
 		# 姓名输入弹窗由 LineEdit 的 text_submitted 信号处理回车提交
 		if _current_dialog_type == DialogType.NAME_INPUT:
+			return
+		# 排行榜弹窗由按钮自行处理，不响应全局关闭
+		if _current_dialog_type == DialogType.LEADERBOARD:
 			return
 		if (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventMouseButton and event.pressed):
 			_hide_custom_dialog()
@@ -1062,6 +1173,7 @@ func _set_paused(paused: bool, show_pause_label: bool = true) -> void:
 	redo_button.disabled = paused or undo_history.is_empty()
 	hint_button.disabled = paused
 	shuffle_button.disabled = paused
+	_update_timer_bar()
 
 
 # 模块：游戏流程 —— 倒计时、胜负判定
@@ -1077,7 +1189,7 @@ func _process(delta: float) -> void:
 		_timer_running = false
 		_on_time_up()
 
-	timer_bar.value = remaining_time
+	_update_timer_bar()
 	_update_time_labels()
 
 
@@ -1137,10 +1249,22 @@ func restart_game(reset_progress: bool = true) -> void:
 	print("game started!")
 
 
-# 同步倒计时红条的最大值与当前值
+# 同步倒计时进度条的最大值与当前值，最后 10 秒触发脉冲闪烁
 func _update_timer_bar() -> void:
 	timer_bar.max_value = MAX_TIME
 	timer_bar.value = remaining_time
+
+	var should_pulse := remaining_time <= 10.0 and remaining_time > 0.0 \
+		and game_state == GameState.PLAYING and _timer_running and not _is_paused
+	if should_pulse and _timer_pulse_tween == null:
+		_timer_pulse_tween = create_tween()
+		_timer_pulse_tween.set_loops()
+		_timer_pulse_tween.tween_property(timer_bar, "modulate", Color(1.45, 1.45, 1.45, 1.0), 0.25)
+		_timer_pulse_tween.tween_property(timer_bar, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+	elif not should_pulse and _timer_pulse_tween != null:
+		_timer_pulse_tween.kill()
+		_timer_pulse_tween = null
+		timer_bar.modulate = Color.WHITE
 
 
 # 生成随机棋盘，并确保至少存在一对可消除的牌
@@ -1217,12 +1341,12 @@ func _format_time(seconds: float) -> String:
 
 # 刷新时间显示
 func _update_time_labels() -> void:
-	time_label.text = "[color=#BB8F65]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#BB8F65]本关用时：[/color][color=#FFF8F0]%s[/color]" % [_format_time(total_game_time), _format_time(level_time)]
+	time_label.text = "[color=#8C5C33]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % [_format_time(total_game_time), _format_time(level_time)]
 
 
 # 刷新分数显示
 func _update_score_label() -> void:
-	score_label.text = "[color=#BB8F65]分数：[/color][color=#E07A82]%d[/color]" % score
+	score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
 
 
 # 分数标签大小变化时同步缩放中心
@@ -1395,6 +1519,7 @@ func _eliminate(r1: int, c1: int, r2: int, c2: int) -> float:
 	board[r1][c1] = 0
 	board[r2][c2] = 0
 	pairs_left -= 1
+	_update_pairs_label()
 
 	remaining_time = min(MAX_TIME, remaining_time + TIME_BONUS)
 	_update_timer_bar()

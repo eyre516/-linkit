@@ -1,5 +1,3 @@
-; cell.tscn — 格子场景：PanelContainer + TextureRect，用于显示单个连连看图标
-
 [gd_scene load_steps=3 format=3 uid="uid://bm62ipt0ofqm7"]
 
 [ext_resource type="Script" uid="uid://bx55232lcd1sp" path="res://cell.gd" id="2_gwrgs"]
@@ -9,7 +7,6 @@ bg_color = Color(1, 0.973, 0.941, 1)
 
 [node name="Cell" type="PanelContainer"]
 custom_minimum_size = Vector2(48, 48)
-anchors_preset = -1
 offset_right = 40.0
 offset_bottom = 40.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_gwrgs")
@@ -28,12 +25,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="SelectionHighlight" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 mouse_filter = 2
 color = Color(0.88, 0.628, 0.638, 0.45)
 
