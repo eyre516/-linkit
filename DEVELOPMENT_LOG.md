@@ -933,3 +933,236 @@ cd assets/连连看例子
 - 建议启动 Godot 后打开排行榜，观察：
   - “排名 / 姓名 / 日期 / 用时 / 分数”五个表头是否各自与下方数据在同一垂直线上。
   - 切换不同难度、翻页后是否仍然保持对齐。
+
+
+---
+
+### 37. 顶部 UI 自动隐藏与悬停恢复
+
+**时间**：2026-07-05  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望游戏开局后顶部区域更简洁，减少干扰；需要保留关键信息（倒计时、本关用时、分数），并通过鼠标悬停屏幕顶部快速恢复完整菜单。
+
+**改动**：
+
+1. **场景 `game.tscn`**：
+   - 新增 `CompactTopBar` 面板（`VBoxContainer/CompactTopBar`），默认隐藏，包含：
+     - `CompactTimerBar`：倒计时进度条，与 `InfoBar` 中的进度条共用同一渐变填充样式。
+     - `CompactTimeLabel`：仅显示“本关用时”。
+     - `CompactScoreLabel`：显示分数。
+   - 为 `MenuBar`、`InfoBar` 以及按钮行 `HBoxContainer` 添加 `unique_name_in_owner = true`，便于脚本中统一显示/隐藏。
+   - 在根节点 `Game` 下新增 `UIHideTimer`（`Timer`，`one_shot = true`，默认等待 5 秒），用于触发自动隐藏。
+   - 在场景底部新增信号连接：`UIHideTimer.timeout -> _on_ui_hide_timer_timeout`。
+
+2. **脚本 `game.gd`**：
+   - 新增常量：
+     - `AUTO_HIDE_DELAY := 5.0`：开局后多久自动隐藏。
+     - `TOP_TRIGGER_HEIGHT := 24.0`：鼠标移到屏幕顶部多少像素内触发恢复。
+     - `TOP_HIDE_DELAY := 1.5`：鼠标离开顶部后多久重新隐藏。
+   - 新增状态变量 `_ui_hidden`、`_top_leave_time`，以及紧凑进度条脉冲动画引用 `_compact_timer_pulse_tween`。
+   - 新增节点引用：`compact_timer_bar`、`compact_time_label`、`compact_score_label`、`menu_bar`、`info_bar`、`toolbar`、`compact_top_bar`、`ui_hide_timer`。
+   - 在 `_ready()` 中连接 `ui_hide_timer.timeout`。
+   - 在 `_set_paused()` 中同步 `ui_hide_timer.paused`，暂停/继续时计时器不会继续走动。
+   - 在 `restart_game()` 中：
+     - 重置 `_ui_hidden` 与 `_top_leave_time`。
+     - 调用 `_show_full_ui()` 恢复完整顶部 UI。
+     - 启动 `ui_hide_timer`（5 秒）。
+   - 新增 `_update_ui_visibility(delta)`：
+     - 仅在游戏进行中且未暂停时生效。
+     - 鼠标位于屏幕顶部 `TOP_TRIGGER_HEIGHT` 以内时，立即恢复完整 UI。
+     - 鼠标离开顶部且 5 秒倒计时已结束，经过 `TOP_HIDE_DELAY` 后切换到紧凑 UI。
+   - 新增 `_show_compact_ui()` / `_show_full_ui()`：统一控制三行（菜单栏、信息栏、按钮行）与紧凑面板的显隐。
+   - 新增 `_update_compact_ui()`：刷新紧凑面板的倒计时条、本关用时与分数。
+   - 新增 `_on_ui_hide_timer_timeout()`：5 秒到达后，若鼠标不在屏幕顶部则切换到紧凑 UI。
+   - `_update_timer_bar()` 同时同步 `compact_timer_bar`，并为其也添加最后 10 秒脉冲闪烁；新增 `_create_timer_pulse_tween()` 辅助函数避免代码重复。
+   - `_update_time_labels()` 与 `_update_score_label()` 同时更新紧凑面板中的 `CompactTimeLabel` 与 `CompactScoreLabel`。
+   - 时间耗尽 `_on_time_up()` 与关卡完成 `_on_level_complete()` 时调用 `_show_full_ui()`，确保结束/弹窗状态下完整 UI 可见。
+
+**验证**：
+- 静态检查 `game.tscn` 节点结构与 `game.gd` 语法，未发现引用错误。
+- 建议启动 Godot 后验证：
+  - 开局 5 秒后，菜单栏、难度信息栏、回退/提示/洗牌等按钮行是否隐藏，仅保留顶部紧凑条（倒计时条 + 本关用时 + 分数）。
+  - 鼠标移到屏幕最上方时，三行是否在 1 秒内恢复显示。
+  - 鼠标离开屏幕顶部超过 1.5 秒后，是否再次进入紧凑模式。
+  - 暂停、弹窗、游戏结束或关卡完成时，完整 UI 是否正常显示。
+
+
+---
+
+### 38. 自动隐藏提示与棋盘边距加倍
+
+**时间**：2026-07-05  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望在 UI 首次自动隐藏后给出恢复提示，并让棋盘区域距离窗口四周更远一些。
+
+**改动**：
+
+1. **提示功能**：
+   - 在 `game.tscn` 的 `CanvasLayer` 中新增 `AutoHideHint` 标签，默认隐藏，位于顶部居中（`anchors_preset = 10`），文字为“将鼠标移到屏幕顶部即可恢复菜单栏”。
+   - 在根节点新增 `HintHideTimer`（`Timer`，`one_shot = true`，等待 20 秒）。
+   - 在 `game.gd` 中：
+     - 新增节点引用 `auto_hide_hint`、`hint_hide_timer`，以及状态变量 `_auto_hide_hint_shown`。
+     - 在 `_ready()` 中连接 `hint_hide_timer.timeout`。
+     - `_show_compact_ui()` 首次切换到紧凑模式时显示提示并启动 20 秒倒计时；同一局游戏内不会重复显示。
+     - `_show_full_ui()` 恢复完整 UI 时立即隐藏提示并停止倒计时。
+     - 新增 `_on_hint_hide_timer_timeout()`：20 秒到后自动隐藏提示。
+     - `restart_game()` 重置 `_auto_hide_hint_shown = false`，保证每局重新显示一次。
+
+2. **棋盘边距加倍**：
+   - 在 `game.tscn` 中把 `VBoxContainer` 的四周偏移从 `4.0` 改为 `8.0`：
+     - `offset_left`：`4.0` → `8.0`
+     - `offset_top`：`4.0` → `8.0`
+     - `offset_right`：`-4.0` → `-8.0`
+     - `offset_bottom`：`-4.0` → `-8.0`
+   - 这样整个游戏内容区（含棋盘）距离窗口四周的边距从 4 像素变为 8 像素，即原来的 2 倍。
+
+**验证**：
+- 静态检查 `game.tscn` 节点属性与 `game.gd` 语法，未发现引用错误。
+- 建议启动 Godot 后验证：
+  - 开局 5 秒后进入紧凑模式时，是否出现“将鼠标移到屏幕顶部即可恢复菜单栏”提示。
+  - 提示是否在显示 20 秒后自动消失，或在鼠标移到顶部恢复完整 UI 时立即消失。
+  - 棋盘四周是否比原来有更多留白（从 4px 增加到 8px）。
+
+
+---
+
+### 39. 恢复提示每局显示三次
+
+**时间**：2026-07-05  
+**涉及文件**：`game.gd`
+
+**原因**：用户反馈每局游戏只显示一次自动隐藏恢复提示不够明显，希望增加到三次。
+
+**改动**：
+- 将布尔变量 `_auto_hide_hint_shown` 改为计数变量 `_auto_hide_hint_count`。
+- 新增常量 `AUTO_HIDE_HINT_MAX := 3`。
+- `_show_compact_ui()` 中，只要本局进入紧凑模式的次数不超过 3 次，就显示 20 秒提示；每次显示时计数加 1。
+- `restart_game()` 中重置 `_auto_hide_hint_count = 0`。
+
+**验证**：
+- 静态检查 GDScript 语法与逻辑，未发现错误。
+- 建议启动 Godot 后验证：
+  - 同一局游戏中，前 3 次进入紧凑模式时是否每次都出现恢复提示。
+  - 第 4 次及以后进入紧凑模式时是否不再显示提示。
+  - 重新开始一局后，提示次数是否重新累计。
+
+
+---
+
+### 40. 仅底部边距加倍
+
+**时间**：2026-07-05  
+**涉及文件**：`game.tscn`
+
+**原因**：用户希望只增加棋盘/游戏区域到底部的距离，左右和顶部保持当前 8 像素不变。
+
+**改动**：
+- `VBoxContainer` 的 `offset_bottom` 从 `-8.0` 改为 `-16.0`，底部边距由 8 像素增加到 16 像素（即当前值的两倍）。
+- `offset_left`、`offset_top`、`offset_right` 保持 `8.0` / `-8.0` 不变。
+
+**验证**：
+- 静态检查场景文件，节点引用正确。
+- 建议启动 Godot 后观察：游戏区域左右和顶部留白与之前一致，只有底部到窗口下边缘的距离明显变大。
+
+
+---
+
+### 41. 底部边距调整为 1.5 倍
+
+**时间**：2026-07-05  
+**涉及文件**：`game.tscn`
+
+**原因**：用户希望进一步调整底部边距为当前值的 1.5 倍。
+
+**改动**：
+- `VBoxContainer` 的 `offset_bottom` 从 `-16.0` 改为 `-24.0`，底部边距由 16 像素增加到 24 像素（即 16 像素的 1.5 倍）。
+- 左、右、顶部边距保持不变。
+
+**验证**：
+- 静态检查场景文件，节点引用正确。
+- 建议启动 Godot 后观察底部留白是否符合预期。
+
+
+---
+
+### 42. 恢复提示改为左侧竖排大字
+
+**时间**：2026-07-05  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望恢复提示以竖排形式显示在屏幕左侧，并放大字体。
+
+**改动**：
+
+1. **场景 `game.tscn`**：
+   - 将 `CanvasLayer/AutoHideHint` 从 `Label` 改为 `RichTextLabel`。
+   - 文字改为每个汉字独占一行，实现竖排效果：
+     ```
+     将
+     鼠
+     标
+     移
+     到
+     屏
+     幕
+     顶
+     部
+     即
+     可
+     恢
+     复
+     菜
+     单
+     栏
+     ```
+   - 锚点设为左侧居中（`anchors_preset = 9`），`offset_left = 16.0`，整体位于屏幕左侧。
+   - 字体大小从 20 提高到 36（`theme_override_font_sizes/normal_font_size = 36`）。
+   - 开启 `bbcode_enabled` 并给文字加上浅色（`#FFF8F0`），保证在各种背景下可读。
+
+2. **脚本 `game.gd`**：
+   - 将 `auto_hide_hint` 的变量类型从 `Label` 改为 `RichTextLabel`，与场景节点类型一致。
+
+**验证**：
+- 静态检查场景节点与脚本引用类型一致，未发现错误。
+- 建议启动 Godot 后验证：
+  - 提示是否以竖排大字显示在屏幕左侧居中位置。
+  - 字体大小是否明显比原来大。
+  - 提示在 20 秒或恢复完整 UI 后是否正常消失。
+
+
+---
+
+### 43. 恢复提示显示时间改为 15 秒
+
+**时间**：2026-07-05  
+**涉及文件**：`game.tscn`、`game.gd`
+
+**原因**：用户希望自动隐藏后的恢复提示显示时间从 20 秒缩短为 15 秒。
+
+**改动**：
+- `game.tscn` 中 `HintHideTimer` 的 `wait_time` 从 `20.0` 改为 `15.0`。
+- `game.gd` 中 `_show_compact_ui()` 启动提示隐藏计时器的时间从 `20.0` 秒改为 `15.0` 秒。
+
+**验证**：
+- 静态检查场景与脚本数值一致。
+- 建议启动 Godot 后验证：进入紧凑模式后，左侧竖排提示是否在 15 秒后自动消失。
+
+
+---
+
+### 44. 恢复提示改回每局显示一次
+
+**时间**：2026-07-05  
+**涉及文件**：`game.gd`
+
+**原因**：用户希望恢复提示仍保持每局游戏只显示一次。
+
+**改动**：
+- 将 `AUTO_HIDE_HINT_MAX` 从 `3` 改回 `1`。
+- `_show_compact_ui()` 中注释从“每局前 3 次”改为“每局首次”。
+
+**验证**：
+- 静态检查逻辑正确。
+- 建议启动 Godot 后验证：同一局游戏中无论进入紧凑模式多少次，左侧竖排提示只出现一次；重新开始后再次显示一次。

@@ -34,6 +34,16 @@ grow_vertical = 2
 theme = ExtResource("3_ocean")
 script = ExtResource("1_feb5d")
 
+[node name="UIHideTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 5.0
+one_shot = true
+
+[node name="HintHideTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 15.0
+one_shot = true
+
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -48,14 +58,61 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 4.0
-offset_top = 4.0
-offset_right = -4.0
-offset_bottom = -4.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -24.0
 grow_horizontal = 2
 grow_vertical = 2
 
+[node name="CompactTopBar" type="PanelContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_vertical = 0
+theme_type_variation = &"MenuBarPanel"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/CompactTopBar"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="CompactTimerBar" type="ProgressBar" parent="VBoxContainer/CompactTopBar/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/fill = SubResource("StyleBoxTexture_timer_fill")
+max_value = 60.0
+value = 60.0
+
+[node name="CompactTimeLabel" type="RichTextLabel" parent="VBoxContainer/CompactTopBar/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+bbcode_enabled = true
+text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]00:00[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
+[node name="CompactScoreLabel" type="RichTextLabel" parent="VBoxContainer/CompactTopBar/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+bbcode_enabled = true
+text = "[color=#8C5C33]分数：[/color][color=#E07A82]0[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
 [node name="MenuBar" type="PanelContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_vertical = 0
@@ -121,6 +178,7 @@ scroll_active = false
 autowrap_mode = 0
 
 [node name="InfoBar" type="PanelContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 size_flags_vertical = 0
@@ -177,6 +235,7 @@ max_value = 60.0
 value = 60.0
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 size_flags_vertical = 0
@@ -505,6 +564,40 @@ layout_mode = 2
 layout_mode = 2
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="AutoHideHint" type="RichTextLabel" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 9
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 16.0
+offset_top = -300.0
+offset_right = 80.0
+offset_bottom = 300.0
+grow_horizontal = 2
+grow_vertical = 2
+bbcode_enabled = true
+text = "[color=#FFF8F0]将
+鼠
+标
+移
+到
+屏
+幕
+顶
+部
+即
+可
+恢
+复
+菜
+单
+栏[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+theme_override_font_sizes/normal_font_size = 36
 
 [node name="GameOverPanel" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -852,3 +945,5 @@ text = "返回"
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/UndoButton" to="." method="_on_undo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RedoButton" to="." method="_on_redo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RestartButton" to="." method="_on_restart_button_pressed"]
+[connection signal="timeout" from="UIHideTimer" to="." method="_on_ui_hide_timer_timeout"]
+[connection signal="timeout" from="HintHideTimer" to="." method="_on_hint_hide_timer_timeout"]

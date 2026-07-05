@@ -133,6 +133,13 @@ var _timer_running: bool = false
 var _is_paused: bool = false
 var _is_animating: bool = false
 var _timer_pulse_tween: Tween = null
+var _compact_timer_pulse_tween: Tween = null
+
+var _ui_hidden: bool = false
+var _top_leave_time: float = 0.0
+var _auto_hide_hint_count: int = 0
+
+const AUTO_HIDE_HINT_MAX := 1           # 每局游戏最多显示几次恢复提示
 
 # 鼠标按键状态（用于左右键同时按下的洗牌快捷键）
 var _left_mouse_pressed: bool = false
@@ -140,6 +147,11 @@ var _right_mouse_pressed: bool = false
 var _left_press_time: int = 0
 var _right_press_time: int = 0
 const MOUSE_COMBO_WINDOW_MS := 150
+
+# 顶部 UI 自动隐藏相关常量
+const AUTO_HIDE_DELAY := 5.0          # 游戏开始后多久自动隐藏顶部 UI
+const TOP_TRIGGER_HEIGHT := 24.0      # 鼠标移到屏幕顶部多少像素内触发显示
+const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 UI
 
 # 自定义弹窗类型与回调
 enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT}
@@ -198,6 +210,16 @@ var _bgm_player: AudioStreamPlayer
 @onready var level_label: RichTextLabel = %LevelLabel
 @onready var remaining_pairs_label: RichTextLabel = %RemainingPairsLabel
 @onready var timer_bar: ProgressBar = %TimerBar
+@onready var compact_timer_bar: ProgressBar = %CompactTimerBar
+@onready var compact_time_label: RichTextLabel = %CompactTimeLabel
+@onready var compact_score_label: RichTextLabel = %CompactScoreLabel
+@onready var menu_bar: PanelContainer = %MenuBar
+@onready var info_bar: PanelContainer = %InfoBar
+@onready var toolbar: HBoxContainer = %HBoxContainer
+@onready var compact_top_bar: PanelContainer = %CompactTopBar
+@onready var ui_hide_timer: Timer = %UIHideTimer
+@onready var auto_hide_hint: RichTextLabel = %AutoHideHint
+@onready var hint_hide_timer: Timer = %HintHideTimer
 @onready var grid_container: GridContainer = %GridContainer
 @onready var aspect_ratio_container: AspectRatioContainer = %AspectRatioContainer
 @onready var board_center: CenterContainer = %BoardCenter
@@ -263,6 +285,8 @@ func _ready() -> void:
 	dialog_name_input.text_submitted.connect(_on_name_input_submitted)
 	shuffle_button.pressed.connect(_on_shuffle_button_pressed)
 	pause_button.pressed.connect(_toggle_pause)
+	ui_hide_timer.timeout.connect(_on_ui_hide_timer_timeout)
+	hint_hide_timer.timeout.connect(_on_hint_hide_timer_timeout)
 
 	# 排行榜弹窗按钮
 	leaderboard_tab_buttons[0].pressed.connect(_on_leaderboard_tab_pressed.bind(1))
@@ -394,6 +418,7 @@ func _advance_level() -> void:
 func _on_level_complete() -> void:
 	# 播放胜利音效
 	_play_sound(GAME_WON_SOUND)
+	_show_full_ui()
 	if _is_final_level():
 		# 最终关卡胜利时播放烟花庆祝
 		var fireworks := FIREWORKS_SCENE.instantiate()
@@ -1161,6 +1186,7 @@ func _toggle_pause() -> void:
 func _set_paused(paused: bool, show_pause_label: bool = true) -> void:
 	_is_paused = paused
 	_timer_running = not paused
+	ui_hide_timer.paused = paused
 	pause_label.visible = false
 	pause_dim.visible = paused and show_pause_label
 	pause_menu_panel.visible = paused and show_pause_label
@@ -1191,6 +1217,7 @@ func _process(delta: float) -> void:
 
 	_update_timer_bar()
 	_update_time_labels()
+	_update_ui_visibility(delta)
 
 
 # 时间耗尽：显示结束语并播放失败音效
@@ -1199,6 +1226,77 @@ func _on_time_up() -> void:
 	game_over_label.text = "时间结束~欢迎游玩，下次再接再厉！"
 	game_over_panel.show()
 	_play_sound(GAME_OVER_SOUND)
+	_show_full_ui()
+
+
+# 顶部 UI 自动隐藏/显示：游戏开始 5 秒后进入紧凑模式，鼠标移到屏幕顶部恢复完整 UI
+func _update_ui_visibility(delta: float) -> void:
+	if game_state != GameState.PLAYING or _is_paused:
+		return
+
+	var mouse_y := get_global_mouse_position().y
+	if mouse_y <= TOP_TRIGGER_HEIGHT:
+		_top_leave_time = 0.0
+		if _ui_hidden:
+			_show_full_ui()
+		return
+
+	if not _ui_hidden:
+		if ui_hide_timer.is_stopped():
+			_top_leave_time += delta
+			if _top_leave_time >= TOP_HIDE_DELAY:
+				_show_compact_ui()
+
+
+# 切换到紧凑顶部 UI（只显示倒计时条、本关用时、分数）
+func _show_compact_ui() -> void:
+	_ui_hidden = true
+	_top_leave_time = 0.0
+	menu_bar.hide()
+	info_bar.hide()
+	toolbar.hide()
+	compact_top_bar.show()
+	_update_compact_ui()
+	# 每局首次进入紧凑模式时显示 15 秒恢复提示
+	if _auto_hide_hint_count < AUTO_HIDE_HINT_MAX:
+		_auto_hide_hint_count += 1
+		auto_hide_hint.show()
+		hint_hide_timer.stop()
+		hint_hide_timer.start(15.0)
+
+
+# 恢复完整顶部 UI（菜单栏、信息栏、工具栏）
+func _show_full_ui() -> void:
+	_ui_hidden = false
+	_top_leave_time = 0.0
+	menu_bar.show()
+	info_bar.show()
+	toolbar.show()
+	compact_top_bar.hide()
+	auto_hide_hint.hide()
+	hint_hide_timer.stop()
+
+
+# 刷新紧凑顶部 UI 的倒计时条、本关用时与分数
+func _update_compact_ui() -> void:
+	compact_timer_bar.max_value = MAX_TIME
+	compact_timer_bar.value = remaining_time
+	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % _format_time(level_time)
+	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
+
+
+# 游戏开始 5 秒后尝试切换到紧凑 UI；若鼠标正在屏幕顶部则保持完整 UI
+func _on_ui_hide_timer_timeout() -> void:
+	if game_state != GameState.PLAYING or _is_paused:
+		return
+	if get_global_mouse_position().y <= TOP_TRIGGER_HEIGHT:
+		return
+	_show_compact_ui()
+
+
+# 20 秒提示时间到后隐藏恢复提示
+func _on_hint_hide_timer_timeout() -> void:
+	auto_hide_hint.hide()
 
 
 # 重置游戏状态、棋盘与倒计时
@@ -1220,12 +1318,20 @@ func restart_game(reset_progress: bool = true) -> void:
 	undo_history.clear()
 	level_time = 0.0
 	_pending_next_level = -1
+	_ui_hidden = false
+	_top_leave_time = 0.0
+	_auto_hide_hint_count = 0
 
 	# 重置鼠标按键状态，避免跨关卡误触发左右键组合快捷键
 	_left_mouse_pressed = false
 	_right_mouse_pressed = false
 	_left_press_time = 0
 	_right_press_time = 0
+
+	# 每次重新开始后恢复完整 UI，并在 5 秒后尝试自动隐藏
+	_show_full_ui()
+	ui_hide_timer.stop()
+	ui_hide_timer.start(AUTO_HIDE_DELAY)
 
 	if reset_progress:
 		total_game_time = 0.0
@@ -1253,18 +1359,31 @@ func restart_game(reset_progress: bool = true) -> void:
 func _update_timer_bar() -> void:
 	timer_bar.max_value = MAX_TIME
 	timer_bar.value = remaining_time
+	compact_timer_bar.max_value = MAX_TIME
+	compact_timer_bar.value = remaining_time
 
 	var should_pulse := remaining_time <= 10.0 and remaining_time > 0.0 \
 		and game_state == GameState.PLAYING and _timer_running and not _is_paused
 	if should_pulse and _timer_pulse_tween == null:
-		_timer_pulse_tween = create_tween()
-		_timer_pulse_tween.set_loops()
-		_timer_pulse_tween.tween_property(timer_bar, "modulate", Color(1.45, 1.45, 1.45, 1.0), 0.25)
-		_timer_pulse_tween.tween_property(timer_bar, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+		_timer_pulse_tween = _create_timer_pulse_tween(timer_bar)
+		_compact_timer_pulse_tween = _create_timer_pulse_tween(compact_timer_bar)
 	elif not should_pulse and _timer_pulse_tween != null:
 		_timer_pulse_tween.kill()
 		_timer_pulse_tween = null
+		if _compact_timer_pulse_tween != null:
+			_compact_timer_pulse_tween.kill()
+			_compact_timer_pulse_tween = null
 		timer_bar.modulate = Color.WHITE
+		compact_timer_bar.modulate = Color.WHITE
+
+
+# 创建倒计时条脉冲闪烁动画
+func _create_timer_pulse_tween(bar: ProgressBar) -> Tween:
+	var tween := create_tween()
+	tween.set_loops()
+	tween.tween_property(bar, "modulate", Color(1.45, 1.45, 1.45, 1.0), 0.25)
+	tween.tween_property(bar, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+	return tween
 
 
 # 生成随机棋盘，并确保至少存在一对可消除的牌
@@ -1342,11 +1461,13 @@ func _format_time(seconds: float) -> String:
 # 刷新时间显示
 func _update_time_labels() -> void:
 	time_label.text = "[color=#8C5C33]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % [_format_time(total_game_time), _format_time(level_time)]
+	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % _format_time(level_time)
 
 
 # 刷新分数显示
 func _update_score_label() -> void:
 	score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
+	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
 
 
 # 分数标签大小变化时同步缩放中心
