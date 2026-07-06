@@ -138,6 +138,7 @@ var _compact_timer_pulse_tween: Tween = null
 var _ui_hidden: bool = false
 var _top_leave_time: float = 0.0
 var _auto_hide_hint_count: int = 0
+var _hint_flash_tween: Tween = null
 
 const AUTO_HIDE_HINT_MAX := 1           # 每局游戏最多显示几次恢复提示
 
@@ -224,6 +225,7 @@ var _bgm_player: AudioStreamPlayer
 @onready var aspect_ratio_container: AspectRatioContainer = %AspectRatioContainer
 @onready var board_center: CenterContainer = %BoardCenter
 @onready var hint_line: Line2D = %HintLine
+@onready var match_line: Line2D = %MatchLine
 @onready var game_over_label: Label = %GameOverLabel
 @onready var game_over_panel: PanelContainer = %GameOverPanel
 @onready var pause_label: Label = %PauseLabel
@@ -1257,12 +1259,23 @@ func _show_compact_ui() -> void:
 	toolbar.hide()
 	compact_top_bar.show()
 	_update_compact_ui()
-	# 每局首次进入紧凑模式时显示 15 秒恢复提示
+	# 每局首次进入紧凑模式时显示闪烁 3 次后再停留 5 秒的恢复提示
 	if _auto_hide_hint_count < AUTO_HIDE_HINT_MAX:
 		_auto_hide_hint_count += 1
 		auto_hide_hint.show()
+		auto_hide_hint.modulate = Color.WHITE
 		hint_hide_timer.stop()
-		hint_hide_timer.start(15.0)
+		if _hint_flash_tween != null:
+			_hint_flash_tween.kill()
+		_hint_flash_tween = create_tween()
+		_hint_flash_tween.set_loops(3)
+		# 每次闪烁（淡出 + 淡入）共 1.5 秒，比原来 0.5 秒慢 1 秒
+		_hint_flash_tween.tween_property(auto_hide_hint, "modulate:a", 0.2, 0.75)
+		_hint_flash_tween.tween_property(auto_hide_hint, "modulate:a", 1.0, 0.75)
+		_hint_flash_tween.finished.connect(func() -> void:
+			hint_hide_timer.start(5.0)
+			_hint_flash_tween = null
+		)
 
 
 # 恢复完整顶部 UI（菜单栏、信息栏、工具栏）
@@ -1274,7 +1287,11 @@ func _show_full_ui() -> void:
 	toolbar.show()
 	compact_top_bar.hide()
 	auto_hide_hint.hide()
+	auto_hide_hint.modulate = Color.WHITE
 	hint_hide_timer.stop()
+	if _hint_flash_tween != null:
+		_hint_flash_tween.kill()
+		_hint_flash_tween = null
 
 
 # 刷新紧凑顶部 UI 的倒计时条、本关用时与分数
@@ -1294,9 +1311,10 @@ func _on_ui_hide_timer_timeout() -> void:
 	_show_compact_ui()
 
 
-# 20 秒提示时间到后隐藏恢复提示
+# 提示闪烁结束并停留 5 秒后隐藏恢复提示
 func _on_hint_hide_timer_timeout() -> void:
 	auto_hide_hint.hide()
+	auto_hide_hint.modulate = Color.WHITE
 
 
 # 重置游戏状态、棋盘与倒计时
@@ -1538,7 +1556,13 @@ func _on_cell_clicked(index: int) -> void:
 		_play_sound(ERROR_SOUND)
 		return
 
-	# 可以消除：先播放消除动画，再更新棋盘数据
+	# 可以消除：先绘制连接路径，再播放消除动画，然后更新棋盘数据
+	var path: Array[Vector2i] = _find_connection_path(r1, c1, r, c)
+	var points: PackedVector2Array = PackedVector2Array()
+	for ext_pos in path:
+		points.append(_extended_to_screen(ext_pos))
+	match_line.points = points
+
 	var cell1: Cell = grid_container.get_child(selected_index)
 	var cell2: Cell = grid_container.get_child(index)
 	_is_animating = true
@@ -1551,6 +1575,8 @@ func _on_cell_clicked(index: int) -> void:
 		await tween1.finished
 	if tween2 != null:
 		await tween2.finished
+
+	match_line.points = PackedVector2Array()
 
 	# 动画结束后才真正消除并计分
 	var time_since_last: float = _eliminate(r1, c1, r, c)

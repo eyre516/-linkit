@@ -41,7 +41,7 @@ one_shot = true
 
 [node name="HintHideTimer" type="Timer" parent="."]
 unique_name_in_owner = true
-wait_time = 15.0
+wait_time = 5.0
 one_shot = true
 
 [node name="Background" type="ColorRect" parent="."]
@@ -653,6 +653,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(1200, 0)
 layout_mode = 2
 theme_override_font_sizes/normal_font_size = 32
+theme_override_font_sizes/bold_font_size = 32
 bbcode_enabled = true
 text = "内容"
 fit_content = true
@@ -751,6 +752,11 @@ theme_override_font_sizes/font_size = 32
 text = "关闭"
 
 [node name="HintLine" type="Line2D" parent="CanvasLayer"]
+unique_name_in_owner = true
+width = 4.0
+default_color = Color(0.88, 0.628, 0.638, 1)
+
+[node name="MatchLine" type="Line2D" parent="CanvasLayer"]
 unique_name_in_owner = true
 width = 4.0
 default_color = Color(0.88, 0.628, 0.638, 1)
