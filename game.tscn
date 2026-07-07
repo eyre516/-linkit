@@ -111,6 +111,20 @@ fit_content = true
 scroll_active = false
 autowrap_mode = 0
 
+[node name="CompactComboLabel" type="RichTextLabel" parent="VBoxContainer/CompactTopBar/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_font_sizes/normal_font_size = 28
+theme_override_font_sizes/bold_font_size = 28
+bbcode_enabled = true
+text = "[color=#FFD700][b]连击 x2[/b][/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
 [node name="MenuBar" type="PanelContainer" parent="VBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
@@ -233,6 +247,20 @@ size_flags_horizontal = 3
 theme_override_styles/fill = SubResource("StyleBoxTexture_timer_fill")
 max_value = 60.0
 value = 60.0
+
+[node name="ComboLabel" type="RichTextLabel" parent="VBoxContainer/InfoBar/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_font_sizes/normal_font_size = 28
+theme_override_font_sizes/bold_font_size = 28
+bbcode_enabled = true
+text = "[color=#FFD700][b]连击 x2[/b][/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
 
 [node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
 unique_name_in_owner = true
@@ -568,36 +596,38 @@ layout_mode = 2
 [node name="AutoHideHint" type="RichTextLabel" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
-anchors_preset = 9
+anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
 offset_left = 16.0
-offset_top = -300.0
-offset_right = 80.0
-offset_bottom = 300.0
+offset_top = -250.0
+offset_right = 150.0
+offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_font_sizes/normal_font_size = 44
 bbcode_enabled = true
-text = "[color=#FFF8F0]将
+text = "[outline_size=3][outline_color=#000000][color=#FFD700][table=2]
+[cell]将[outline_size=6][outline_color=#000000]
 鼠
-标
+标[/outline_color][/outline_size]
 移
 到
-屏
+[outline_size=6][outline_color=#000000]屏
 幕
 顶
-部
-即
+部[/outline_color][/outline_size][/cell]
+[cell]即
 可
 恢
-复
+复[outline_size=6][outline_color=#000000]
 菜
 单
-栏[/color]"
+栏[/outline_color][/outline_size][/cell]
+[/table][/color][/outline_color][/outline_size]"
 fit_content = true
 scroll_active = false
 autowrap_mode = 0
-theme_override_font_sizes/normal_font_size = 36
 
 [node name="GameOverPanel" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -760,6 +790,53 @@ default_color = Color(0.88, 0.628, 0.638, 1)
 unique_name_in_owner = true
 width = 4.0
 default_color = Color(0.88, 0.628, 0.638, 1)
+
+[node name="ScorePopup" type="Label" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+offset_right = 100.0
+offset_bottom = 50.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 40
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScorePopup2" type="Label" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+offset_right = 100.0
+offset_bottom = 50.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 40
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScorePopup3" type="Label" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+offset_right = 100.0
+offset_bottom = 50.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 40
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScoreGainLabel" type="RichTextLabel" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+offset_right = 90.0
+offset_bottom = 40.0
+theme_override_font_sizes/normal_font_size = 32
+theme_override_font_sizes/bold_font_size = 32
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="PauseLabel" type="Label" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -948,8 +1025,8 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "返回"
 
+[connection signal="timeout" from="UIHideTimer" to="." method="_on_ui_hide_timer_timeout"]
+[connection signal="timeout" from="HintHideTimer" to="." method="_on_hint_hide_timer_timeout"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/UndoButton" to="." method="_on_undo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RedoButton" to="." method="_on_redo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RestartButton" to="." method="_on_restart_button_pressed"]
-[connection signal="timeout" from="UIHideTimer" to="." method="_on_ui_hide_timer_timeout"]
-[connection signal="timeout" from="HintHideTimer" to="." method="_on_hint_hide_timer_timeout"]

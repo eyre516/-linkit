@@ -140,6 +140,9 @@ var _top_leave_time: float = 0.0
 var _auto_hide_hint_count: int = 0
 var _hint_flash_tween: Tween = null
 
+var _last_points: int = 0
+var _combo_count: int = 0
+
 const AUTO_HIDE_HINT_MAX := 1           # 每局游戏最多显示几次恢复提示
 
 # 鼠标按键状态（用于左右键同时按下的洗牌快捷键）
@@ -153,6 +156,14 @@ const MOUSE_COMBO_WINDOW_MS := 150
 const AUTO_HIDE_DELAY := 5.0          # 游戏开始后多久自动隐藏顶部 UI
 const TOP_TRIGGER_HEIGHT := 24.0      # 鼠标移到屏幕顶部多少像素内触发显示
 const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 UI
+
+# 加分反馈相关常量
+const SCHEME_1_FLOATING_TEXT_ENABLED := true  # 方案 1：消除位置飘字（可独立开关）
+const COMBO_FAST_THRESHOLD := 10.0            # 多少秒内消除算一次连击
+const SCORE_COLOR_GOLD := "#FFD700"
+const SCORE_COLOR_SILVER := "#E0E0E0"
+const SCORE_COLOR_BRONZE := "#FF8C00"
+const SCORE_COLOR_NORMAL := "#FFFFFF"
 
 # 自定义弹窗类型与回调
 enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT}
@@ -226,6 +237,12 @@ var _bgm_player: AudioStreamPlayer
 @onready var board_center: CenterContainer = %BoardCenter
 @onready var hint_line: Line2D = %HintLine
 @onready var match_line: Line2D = %MatchLine
+@onready var score_popups: Array[Label] = [%ScorePopup, %ScorePopup2, %ScorePopup3]
+var _score_popup_index: int = 0
+var _score_popup_tweens: Array[Tween] = []
+@onready var score_gain_label: RichTextLabel = %ScoreGainLabel
+@onready var combo_label: RichTextLabel = %ComboLabel
+@onready var compact_combo_label: RichTextLabel = %CompactComboLabel
 @onready var game_over_label: Label = %GameOverLabel
 @onready var game_over_panel: PanelContainer = %GameOverPanel
 @onready var pause_label: Label = %PauseLabel
@@ -339,6 +356,11 @@ func _ready() -> void:
 	# 设置分数标签的缩放中心，便于加分动画
 	score_label.resized.connect(_on_score_label_resized)
 	_on_score_label_resized()
+
+	# 初始化飘字动画 Tween 池
+	_score_popup_tweens.resize(score_popups.size())
+	for i in range(_score_popup_tweens.size()):
+		_score_popup_tweens[i] = null
 
 
 # 最终关卡胜利
@@ -1217,6 +1239,12 @@ func _process(delta: float) -> void:
 		_timer_running = false
 		_on_time_up()
 
+	# 超过 10 秒未消除，连击清零
+	if _last_eliminate_time >= 0 and (total_game_time - _last_eliminate_time) > COMBO_FAST_THRESHOLD:
+		if _combo_count != 0:
+			_combo_count = 0
+			_update_combo_display()
+
 	_update_timer_bar()
 	_update_time_labels()
 	_update_ui_visibility(delta)
@@ -1264,14 +1292,15 @@ func _show_compact_ui() -> void:
 		_auto_hide_hint_count += 1
 		auto_hide_hint.show()
 		auto_hide_hint.modulate = Color.WHITE
+		auto_hide_hint.scale = Vector2(1.0, 1.0)
 		hint_hide_timer.stop()
 		if _hint_flash_tween != null:
 			_hint_flash_tween.kill()
 		_hint_flash_tween = create_tween()
 		_hint_flash_tween.set_loops(3)
-		# 每次闪烁（淡出 + 淡入）共 1.5 秒，比原来 0.5 秒慢 1 秒
-		_hint_flash_tween.tween_property(auto_hide_hint, "modulate:a", 0.2, 0.75)
-		_hint_flash_tween.tween_property(auto_hide_hint, "modulate:a", 1.0, 0.75)
+		# 每次闪烁：仅通过缩放脉冲提醒，不改变透明度，避免文字变暗变糊
+		_hint_flash_tween.tween_property(auto_hide_hint, "scale", Vector2(1.08, 1.08), 0.75)
+		_hint_flash_tween.chain().tween_property(auto_hide_hint, "scale", Vector2(1.0, 1.0), 0.75)
 		_hint_flash_tween.finished.connect(func() -> void:
 			hint_hide_timer.start(5.0)
 			_hint_flash_tween = null
@@ -1288,6 +1317,7 @@ func _show_full_ui() -> void:
 	compact_top_bar.hide()
 	auto_hide_hint.hide()
 	auto_hide_hint.modulate = Color.WHITE
+	auto_hide_hint.scale = Vector2(1.0, 1.0)
 	hint_hide_timer.stop()
 	if _hint_flash_tween != null:
 		_hint_flash_tween.kill()
@@ -1315,6 +1345,7 @@ func _on_ui_hide_timer_timeout() -> void:
 func _on_hint_hide_timer_timeout() -> void:
 	auto_hide_hint.hide()
 	auto_hide_hint.modulate = Color.WHITE
+	auto_hide_hint.scale = Vector2(1.0, 1.0)
 
 
 # 重置游戏状态、棋盘与倒计时
@@ -1339,6 +1370,8 @@ func restart_game(reset_progress: bool = true) -> void:
 	_ui_hidden = false
 	_top_leave_time = 0.0
 	_auto_hide_hint_count = 0
+	_combo_count = 0
+	_update_combo_display()
 
 	# 重置鼠标按键状态，避免跨关卡误触发左右键组合快捷键
 	_left_mouse_pressed = false
@@ -1493,14 +1526,110 @@ func _on_score_label_resized() -> void:
 	score_label.pivot_offset = score_label.size / 2.0
 
 
-func _emphasize_score_label() -> void:
+func _emphasize_score_label(points: int = 0) -> void:
+	var tier_color := _get_score_tier_color(points)
+
+	# 根据当前显示模式，脉冲对应的分数标签
+	var visible_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
+	visible_score_label.pivot_offset = visible_score_label.size / 2.0
+
 	var tween := create_tween().set_parallel(true)
-	tween.tween_property(score_label, "scale", Vector2(1.4, 1.4), 0.12)
-	tween.tween_property(score_label, "modulate", Color(0.88, 0.628, 0.638), 0.12)
+	tween.tween_property(visible_score_label, "scale", Vector2(1.4, 1.4), 0.12)
+	tween.tween_property(visible_score_label, "modulate", tier_color, 0.12)
 
 	var tween_back := create_tween()
-	tween_back.tween_property(score_label, "scale", Vector2(1.0, 1.0), 0.18).set_delay(0.12)
-	tween_back.tween_property(score_label, "modulate", Color(1, 1, 1), 0.18).set_delay(0.12)
+	tween_back.tween_property(visible_score_label, "scale", Vector2(1.0, 1.0), 0.18).set_delay(0.12)
+	tween_back.tween_property(visible_score_label, "modulate", Color(1, 1, 1), 0.18).set_delay(0.12)
+
+
+# 根据分数返回对应等级颜色
+func _get_score_tier_color(points: int) -> Color:
+	match points:
+		30:
+			return Color(SCORE_COLOR_GOLD)
+		20:
+			return Color(SCORE_COLOR_SILVER)
+		15:
+			return Color(SCORE_COLOR_BRONZE)
+		_:
+			return Color(SCORE_COLOR_NORMAL)
+
+
+# 显示加分反馈：方案 1（消除位置飘字）+ 方案 2（分数标签旁弹出 + 标签脉冲）
+func _show_score_feedback(points: int, match_midpoint: Vector2) -> void:
+	# 方案 1：在消除位置飘出带等级色的分数
+	if SCHEME_1_FLOATING_TEXT_ENABLED:
+		_spawn_floating_score(points, match_midpoint)
+
+	# 方案 2：在可见的分数标签旁弹出“+N”，同时分数标签脉冲变色
+	var color_hex := SCORE_COLOR_NORMAL
+	match points:
+		30: color_hex = SCORE_COLOR_GOLD
+		20: color_hex = SCORE_COLOR_SILVER
+		15: color_hex = SCORE_COLOR_BRONZE
+	var target_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
+	score_gain_label.text = "[color=%s][b]+%d[/b][/color]" % [color_hex, points]
+	score_gain_label.global_position = target_score_label.global_position + Vector2(target_score_label.size.x + 8.0, 4.0)
+	score_gain_label.show()
+	score_gain_label.modulate = Color.WHITE
+	var start_y := score_gain_label.position.y
+	var tween := create_tween()
+	tween.tween_property(score_gain_label, "position:y", start_y - 24.0, 0.5)
+	tween.parallel().tween_property(score_gain_label, "modulate:a", 0.0, 0.5)
+	tween.finished.connect(func() -> void:
+		score_gain_label.hide()
+		score_gain_label.modulate = Color.WHITE
+	)
+
+
+# 方案 1：在指定位置生成向上飘动并逐渐消失的分数飘字（连击快时自动延长停留）
+func _spawn_floating_score(points: int, pos: Vector2) -> void:
+	var idx := _score_popup_index
+	var popup: Label = score_popups[idx]
+	_score_popup_index = (_score_popup_index + 1) % score_popups.size()
+
+	# 若该飘字实例仍在动画中，先终止旧动画
+	if _score_popup_tweens[idx] != null:
+		_score_popup_tweens[idx].kill()
+		_score_popup_tweens[idx] = null
+
+	popup.text = "+%d" % points
+	popup.modulate = _get_score_tier_color(points)
+	popup.global_position = pos - popup.size / 2.0
+	popup.show()
+
+	# 连击越高，飘字停留越久（整体都比原来减短 0.3 秒）：
+	# 0-1 连击：停留 0.0 秒 + 淡出 0.7 秒
+	# 2-3 连击：停留 0.3 秒 + 淡出 0.9 秒
+	# 4+ 连击：停留 0.7 秒 + 淡出 1.0 秒
+	var linger_time := 0.0
+	var fade_time := 0.7
+	if _combo_count >= 4:
+		linger_time = 0.7
+		fade_time = 1.0
+	elif _combo_count >= 2:
+		linger_time = 0.3
+		fade_time = 0.9
+
+	var tween := create_tween()
+	tween.tween_property(popup, "position:y", popup.position.y - 50.0, linger_time + fade_time)
+	tween.parallel().tween_property(popup, "modulate:a", 1.0, linger_time)
+	tween.chain().tween_property(popup, "modulate:a", 0.0, fade_time)
+	tween.finished.connect(func() -> void:
+		popup.hide()
+		popup.modulate = Color.WHITE
+		_score_popup_tweens[idx] = null
+	)
+	_score_popup_tweens[idx] = tween
+
+
+# 方案 3：刷新连击标签显示
+func _update_combo_display() -> void:
+	var text := ""
+	if _combo_count > 1:
+		text = "[color=%s][b]连击 x%d[/b][/color]" % [SCORE_COLOR_GOLD, _combo_count]
+	combo_label.text = text
+	compact_combo_label.text = text
 
 
 # 索引与行列坐标互转
@@ -1580,6 +1709,12 @@ func _on_cell_clicked(index: int) -> void:
 
 	# 动画结束后才真正消除并计分
 	var time_since_last: float = _eliminate(r1, c1, r, c)
+
+	# 方案 1/2：显示加分反馈（方案 1 可通过 SCHEME_1_FLOATING_TEXT_ENABLED 单独关闭）
+	# 飘字显示在第二次点击的格子中心
+	var popup_pos: Vector2 = cell2.global_position + cell2.size / 2.0
+	_show_score_feedback(_last_points, popup_pos)
+
 	if current_level == 2:
 		match _level2_direction:
 			Level2Dir.LEFT:
@@ -1659,9 +1794,18 @@ func _eliminate(r1: int, c1: int, r2: int, c2: int) -> float:
 		points = 10
 
 	score += points
+	_last_points = points
 	_last_eliminate_time = total_game_time
+
+	# 更新连击计数：10 秒内消除连击 +1，否则从 1 开始新的连击
+	if time_since_last >= 0 and time_since_last <= COMBO_FAST_THRESHOLD:
+		_combo_count += 1
+	else:
+		_combo_count = 1
+	_update_combo_display()
+
 	_update_score_label()
-	_emphasize_score_label()
+	_emphasize_score_label(points)
 
 	board[r1][c1] = 0
 	board[r2][c2] = 0
@@ -2264,6 +2408,8 @@ func _on_undo_button_pressed() -> void:
 	game_over_panel.hide()
 	_pending_next_level = -1
 	custom_dialog.hide()
+	_combo_count = 0
+	_update_combo_display()
 	_update_all_cells()
 	_update_ui()
 	_update_level_info()
@@ -2299,6 +2445,8 @@ func _on_redo_button_pressed() -> void:
 	score = redo["score_before"]
 	_last_eliminate_time = redo["last_eliminate_time_before"]
 	selected_index = -1
+	_combo_count = 0
+	_update_combo_display()
 	_update_all_cells()
 	_update_ui()
 	_update_level_info()
