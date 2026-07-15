@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://yey3gxhknoih" path="res://game.gd" id="1_feb5d"]
 [ext_resource type="PackedScene" uid="uid://bm62ipt0ofqm7" path="res://cell.tscn" id="2_e2o6t"]
 [ext_resource type="Theme" uid="uid://c0a1b2c3d4e5f" path="res://ocean_theme.tres" id="3_ocean"]
+[ext_resource type="FontFile" uid="uid://c7qgmuyivwaw7" path="res://assets/fonts/NotoSerifSC-Regular.otf" id="4_2epjp"]
 
 [sub_resource type="Gradient" id="Gradient_timer"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -16,11 +17,8 @@ height = 16
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_timer_fill"]
 texture = SubResource("GradientTexture2D_timer")
 
-[sub_resource type="SystemFont" id="SystemFont_pause"]
-font_weight = 800
-
 [sub_resource type="LabelSettings" id="LabelSettings_pause"]
-font = SubResource("SystemFont_pause")
+font = ExtResource("4_2epjp")
 font_size = 140
 font_color = Color(0.88, 0.48, 0.51, 0.9)
 
@@ -166,6 +164,18 @@ flat = false
 custom_minimum_size = Vector2(20, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="ModeLabel" type="RichTextLabel" parent="VBoxContainer/MenuBar/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+bbcode_enabled = true
+text = "[color=#8C5C33]模式：[/color][color=#FFF8F0]休闲[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
 
 [node name="TimeLabel" type="RichTextLabel" parent="VBoxContainer/MenuBar/HBoxContainer"]
 unique_name_in_owner = true
@@ -606,6 +616,7 @@ offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_font_sizes/normal_font_size = 44
+theme_override_fonts/normal_font = ExtResource("4_2epjp")
 bbcode_enabled = true
 text = "[outline_size=3][outline_color=#000000][color=#FFD700][table=2]
 [cell]将[outline_size=6][outline_color=#000000]

@@ -1715,3 +1715,313 @@ cd assets/连连看例子
   - 确认无音频丢失、无花屏或空白格；
   - 观察 `.godot/` 重新导入过程无报错。
 
+
+
+---
+
+### 64. 添加休闲模式与竞技模式
+
+**时间**：2026-07-14  
+**涉及文件**：`game.gd`、`game.tscn`、`AGENTS.md`
+
+**原因**：用户希望游戏支持两种模式：休闲模式保留无限提示与洗牌；竞技模式按关卡限制提示与洗牌次数，并在顶部 UI 显示当前模式。
+
+**改动**：
+
+- `game.gd`：
+  - 新增 `enum GameMode {CASUAL, COMPETITIVE}`。
+  - 新增竞技模式常量：
+    - 第 1–7 关：5 次提示、2 次洗牌
+    - 第 8–10 关：8 次提示、3 次洗牌
+  - 新增状态变量 `current_mode`、`hints_remaining`、`shuffles_remaining`。
+  - 新增 `@onready var mode_label: RichTextLabel = %ModeLabel`。
+  - `_setup_menus()` 中在 `GameMenu` 下新增“模式”子菜单，含“休闲模式”与“竞技模式”两个可勾选条目。
+  - 新增 `_on_mode_menu_item_pressed()` 处理模式切换，切换后调用 `restart_game()` 以新模式重新开始。
+  - 新增 `_update_mode_menu_check()` 同步菜单勾选状态。
+  - `restart_game()` 中根据当前模式和关卡重置剩余提示/洗牌次数。
+  - `_on_hint_button_pressed()` 与 `_on_shuffle_button_pressed()` 在竞技模式下消耗次数，次数为 0 时不响应。
+  - `_set_paused()` 与 `_update_ui()` 中根据模式与剩余次数禁用/启用提示、洗牌按钮。
+  - 新增 `_update_mode_label()` 与 `_update_button_texts()`：
+    - 休闲模式按钮显示“💡 提示”、“🔀 洗牌”。
+    - 竞技模式按钮显示剩余次数，如“💡 提示(5)”、“🔀 洗牌(2)”。
+
+- `game.tscn`：
+  - 在 `VBoxContainer/MenuBar/HBoxContainer` 的 `Spacer` 与 `TimeLabel` 之间新增 `ModeLabel`（`%ModeLabel`）RichTextLabel，显示当前模式。
+
+- `AGENTS.md`：
+  - 更新 `game.gd` 职责说明，加入 `GameMode` 与竞技模式常量说明。
+  - 更新 `game.tscn` 场景说明，加入菜单栏与模式标签。
+
+**验证**：
+- 静态检查 `game.gd` 中新增的节点引用、菜单子菜单名称与回调一致。
+- 建议启动 Godot 后验证：
+  - 默认进入休闲模式，提示与洗牌按钮无次数限制。
+  - 通过 `游戏 → 模式 → 竞技模式` 切换后重新开始，按钮显示剩余次数。
+  - 竞技模式下第 1–7 关开始为 5 提示 / 2 洗牌；第 8–10 关开始为 8 提示 / 3 洗牌。
+  - 竞技模式下次数用尽后对应按钮变灰且点击无效。
+  - 顶部 `ModeLabel` 在“总用时”左侧正确显示“模式：休闲”或“模式：竞技”。
+
+
+
+---
+
+### 65. 将“模式”子菜单置顶
+
+**时间**：2026-07-14  
+**涉及文件**：`game.gd`
+
+**原因**：用户希望 `游戏` 下拉菜单中的“模式”选项放在最上方，便于快速切换。
+
+**改动**：
+
+- `game.gd` 的 `_setup_menus()` 中调整 `GameMenu` 的添加顺序：
+  1. `模式` 子菜单
+  2. 分隔线
+  3. `初级`、`中级`、`高级`
+  4. `选择关卡` 子菜单
+- 同步更新 `_on_game_menu_item_pressed(index)`，将难度索引计算从 `index + 1` 改为 `index - 1`，以适配新的菜单位置。
+
+**验证**：
+- 静态检查菜单索引与难度计算逻辑一致。
+- 建议启动 Godot 后打开 `游戏` 菜单，确认“模式”位于最上方，且切换难度仍能正确进入初级/中级/高级。
+
+
+
+---
+
+### 66. 在帮助菜单中添加模式说明
+
+**时间**：2026-07-14  
+**涉及文件**：`game.gd`
+
+**原因**：用户希望在 `帮助` 菜单中增加模式说明，方便玩家了解休闲模式与竞技模式的区别和次数规则。
+
+**改动**：
+
+- `game.gd`：
+  - `DialogType` 枚举新增 `MODE_RULES`。
+  - `_setup_menus()` 中在 `帮助` 菜单的“连连看规则”之后新增“模式说明”项。
+  - `_on_help_menu_item_pressed(index)` 中新增索引 1 的处理分支：
+    - 弹窗标题为“模式说明”。
+    - 内容说明休闲模式无限提示/洗牌，竞技模式按关卡分配固定次数（1–7 关 5/2，8–10 关 8/3）。
+  - 原有“快捷键说明”“积分规则”“关于”的索引依次后移 1 位。
+
+**验证**：
+- 静态检查 `DialogType.MODE_RULES` 已加入枚举，帮助菜单索引与处理分支一一对应。
+- 建议启动 Godot 后点击 `帮助 → 模式说明`，确认弹窗内容正确显示两种模式的规则。
+
+
+
+---
+
+### 67. 更换 UI 字体为宋体（Noto Serif SC）并保留 Emoji
+
+**时间**：2026-07-15  
+**涉及文件**：
+- `assets/fonts/NotoSerifSC-Regular.otf`（使用项目中已有的宋体）
+- `assets/fonts/NotoColorEmoji.ttf`（新增 Emoji 回退字体）
+- `assets/fonts/main_font.tres`（新增主字体组合：宋体 + Emoji 回退）
+- `ocean_theme.tres`
+- `game.tscn`
+
+**原因**：用户希望界面使用宋体显示，同时保留按钮与标签中的 Emoji。
+
+**改动**：
+
+1. 字体准备：
+   - 使用项目已存在的 `NotoSerifSC-Regular.otf` 作为主宋体。
+   - 从 CTAN 下载 `NotoColorEmoji.ttf`（彩色 Emoji 字体）并放入 `assets/fonts/`。
+   - 为 `NotoSerifSC-Regular.otf` 与 `NotoColorEmoji.ttf` 创建 `.import` 文件，供 Godot 导入。
+2. 创建 `assets/fonts/main_font.tres`：
+   - `base_font` 设为 `NotoSerifSC-Regular.otf`。
+   - `fallbacks` 设为 `[NotoColorEmoji.ttf]`，确保 Emoji 字符可以正常显示。
+3. 更新 `ocean_theme.tres`：
+   - 引入 `main_font.tres` 作为外部资源。
+   - 在 `[resource]` 中设置 `default_font = ExtResource("1_8ajk0")`，让整个主题默认使用宋体 + Emoji 回退。
+4. 更新 `game.tscn`：
+   - 引入 `main_font.tres` 作为外部资源 `4_2epjp`。
+   - 将暂停界面大字号 `LabelSettings_pause` 的字体从系统字体改为 `main_font.tres`，避免该标签脱离主题字体。
+
+**验证**：
+- 静态检查主题、场景的字体引用路径正确。
+- 建议启动 Godot 后观察：
+  - 菜单、按钮、标签文字均为宋体。
+  - 按钮中的 Emoji（↩、↪、⏸、💡、🔀、🔄）以及 RichTextLabel 中的符号仍能正常显示。
+  - 暂停界面的“暂停”二字也使用宋体放大显示。
+
+
+---
+
+### 68. 清理 fonts 文件夹中未使用的字体
+
+**时间**：2026-07-15  
+**涉及文件**：
+- `assets/fonts/NotoSerifCJKsc-Regular.otf`
+- `assets/fonts/NotoSerifCJKsc-Regular.otf.import`
+- `assets/fonts/NotoEmoji-Regular.ttf`
+- `assets/fonts/NotoEmoji-Regular.ttf.import`
+- `.godot/imported/` 中对应的缓存文件
+
+**原因**：字体效果合适后，用户要求删除不需要的文件，保持项目整洁。
+
+**改动**：
+- 删除未使用的 `NotoSerifCJKsc-Regular.otf` 及其导入文件、缓存。
+- 删除备用的 `NotoEmoji-Regular.ttf` 及其导入文件、缓存。
+- 仅保留实际使用的：
+  - `NotoSerifSC-Regular.otf`（宋体主字体）
+  - `NotoColorEmoji.ttf`（Emoji 回退）
+  - `main_font.tres`（字体组合）
+
+**验证**：
+- 静态检查项目代码中已无对 `NotoSerifCJKsc` 和 `NotoEmoji-Regular` 的引用。
+- `assets/fonts/` 中仅剩当前正在使用的字体文件。
+
+
+---
+
+### 69. 为 RichTextLabel 显式设置宋体字体
+
+**时间**：2026-07-15  
+**涉及文件**：`ocean_theme.tres`
+
+**原因**：用户发现“将鼠标移动至顶部”提示语（`AutoHideHint` RichTextLabel）没有使用新字体。
+
+**改动**：
+- 在 `ocean_theme.tres` 中为 `RichTextLabel` 显式指定主题字体：
+  - `normal_font = main_font.tres`
+  - `bold_font = main_font.tres`
+  - `italics_font = main_font.tres`
+  - `mono_font = main_font.tres`
+- 这样所有 `RichTextLabel`（包括提示语、模式标签、分数标签等）都会明确使用宋体 + Emoji 回退。
+
+**验证**：
+- 静态检查 `ocean_theme.tres` 中 `RichTextLabel/fonts/*` 都指向 `main_font.tres`。
+- 建议启动 Godot 后触发顶部自动隐藏提示，确认“将鼠标移动至顶部”文字也是宋体。
+
+
+---
+
+### 70. 修复字体 UID 引用错误导致主题字体未生效
+
+**时间**：2026-07-15  
+**涉及文件**：`assets/fonts/main_font.tres`
+
+**原因**：Godot 编辑器在导入字体时重新分配了 UID（`NotoSerifSC-Regular.otf` 和 `NotoColorEmoji.ttf` 的 UID 与最初手写的 `.import` 文件不一致），而 `main_font.tres` 仍然引用旧 UID，导致 `FontVariation` 加载失败，UI 回退到系统默认字体（看起来像繁体字）。
+
+**改动**：
+- 将 `main_font.tres` 中的字体资源 UID 更新为 Godot 实际生成的 UID：
+  - `NotoSerifSC-Regular.otf`：`uid://c7qgmuyivwaw7`
+  - `NotoColorEmoji.ttf`：`uid://ch4acpi63uv7l`
+
+**验证**：
+- 静态检查项目中已无旧 UID 引用。
+- 建议删除 `.godot/` 缓存后重新打开 Godot，让主题字体正确加载，再确认所有中文文字均为宋体。
+
+
+---
+
+### 71. 去掉 FontVariation，直接用 NotoSerifSC 作为主题字体并代码添加 Emoji 回退
+
+**时间**：2026-07-15  
+**涉及文件**：
+- `assets/fonts/main_font.tres`（删除）
+- `ocean_theme.tres`
+- `game.tscn`
+- `game.gd`
+
+**原因**：经过多次尝试，`FontVariation` 资源在项目中未能正确加载，导致主题字体始终没有生效，界面回退到系统默认字体（看起来像繁体）。改为直接引用已导入的 `NotoSerifSC-Regular.otf` 作为主题字体，并在运行时为其添加 Emoji 回退。
+
+**改动**：
+
+1. 删除 `assets/fonts/main_font.tres`，避免失效的中间资源干扰。
+2. 更新 `ocean_theme.tres`：
+   - 将外部字体资源从 `main_font.tres` 改为 `NotoSerifSC-Regular.otf`。
+   - `default_font`、`RichTextLabel` 的 `normal_font`/`bold_font`/`italics_font`/`mono_font` 都指向该字体文件。
+3. 更新 `game.tscn`：
+   - 将暂停界面 `LabelSettings_pause` 的字体从 `main_font.tres` 改为 `NotoSerifSC-Regular.otf`。
+4. 更新 `game.gd`：
+   - 新增常量 `EMOJI_FONT` 预加载 `NotoColorEmoji.ttf`。
+   - 在 `_ready()` 中加载 `NotoSerifSC-Regular.otf`，并把 `EMOJI_FONT` 加入其 `fallbacks`，保证按钮里的 emoji 仍能正常显示。
+
+**验证**：
+- 静态检查 `ocean_theme.tres` 和 `game.tscn` 中已无对 `main_font.tres` 的引用。
+- 重新打开 Godot 后，所有中文标签（包括“将鼠标移动至顶部”提示）应直接使用 Noto Serif SC 宋体。
+- 按钮中的 emoji 符号应继续显示。
+
+
+---
+
+### 72. 将自动隐藏提示改为横向整句显示
+
+**时间**：2026-07-15  
+**涉及文件**：`game.tscn`
+
+**原因**：用户要求“将鼠标移到屏幕顶部即可恢复菜单栏”这句话用当前字体横向、标准简体字显示，而不是之前的竖排单字布局。
+
+**改动**：
+- 修改 `CanvasLayer/AutoHideHint` 的 `text`：
+  - 去掉 `[table]` 竖排布局，改为完整一句 `[outline_size=3][outline_color=#000000][color=#FFD700]将鼠标移到屏幕顶部即可恢复菜单栏[/color][/outline_color][/outline_size]`。
+- 调整控件尺寸：
+  - `offset_top` 从 `-250.0` 改为 `-40.0`
+  - `offset_bottom` 从 `250.0` 改为 `40.0`
+  - `offset_right` 从 `150.0` 改为 `800.0`
+  - 使其适应一行横向文字的宽度。
+
+**验证**：
+- 静态检查 `AutoHideHint` 的文字为标准简体字，且使用主题中设置的 NotoSerifSC 字体。
+- 运行后鼠标移到屏幕顶部触发提示时，应显示为一行横向宋体文字。
+
+
+---
+
+### 73. 恢复自动隐藏提示的原始竖排布局与位置，并显式指定宋体
+
+**时间**：2026-07-15  
+**涉及文件**：`game.tscn`
+
+**原因**：用户希望保留原来的排版和位置，只要求文字用标准简体字宋体显示；同时反馈“将”“复”等字显示异常，因此给该提示单独显式设置字体，避免主题字体未正确继承。
+
+**改动**：
+- 恢复 `CanvasLayer/AutoHideHint` 的原始位置和尺寸：
+  - `offset_top = -250.0`
+  - `offset_bottom = 250.0`
+  - `offset_right = 150.0`
+- 恢复原来的 `[table=2]` 竖排文字布局。
+- 为该 `RichTextLabel` 显式添加 `theme_override_fonts/normal_font = ExtResource("4_2epjp")`，直接指向 `NotoSerifSC-Regular.otf`，确保提示文字使用宋体。
+
+**验证**：
+- 静态检查 `AutoHideHint` 的文字为标准简体字，且字体覆盖明确指向 NotoSerifSC。
+- 运行后提示应保持原有竖排位置和样式，文字为宋体。
+
+
+---
+
+### 74. 【最终完成】UI 字体成功更换为宋体（Noto Serif SC）并保留 Emoji
+
+**时间**：2026-07-15  
+**涉及文件**：
+- `assets/fonts/NotoSerifSC-Regular.otf`
+- `assets/fonts/NotoColorEmoji.ttf`
+- `assets/fonts/NotoSerifSC-Regular.otf.import`
+- `assets/fonts/NotoColorEmoji.ttf.import`
+- `ocean_theme.tres`
+- `game.tscn`
+- `game.gd`
+- `DEVELOPMENT_LOG.md`
+
+**原因**：经过多轮尝试（`FontVariation` 资源、`Theme.default_font`、`RichTextLabel` 主题字体项等），最终确认需要直接引用已导入的 `NotoSerifSC-Regular.otf` 作为主题字体，并为 `AutoHideHint` 单独显式设置 `normal_font`，才能确保所有文字（包括 CanvasLayer 下的提示语）都正确渲染为宋体。
+
+**最终方案**：
+1. 主题字体：
+   - `ocean_theme.tres` 的 `default_font` 直接设为 `NotoSerifSC-Regular.otf`。
+   - `RichTextLabel` 的 `normal_font`/`bold_font`/`italics_font`/`mono_font` 也直接指向 `NotoSerifSC-Regular.otf`。
+2. Emoji 回退：
+   - `game.gd` 中在 `_ready()` 加载 `NotoSerifSC-Regular.otf`，并把 `NotoColorEmoji.ttf` 加入其 `fallbacks`，保证按钮与标签中的 emoji 正常显示。
+3. 自动隐藏提示：
+   - `game.tscn` 中 `CanvasLayer/AutoHideHint` 恢复原始竖排布局与位置。
+   - 为该节点显式设置 `theme_override_fonts/normal_font = NotoSerifSC-Regular.otf`，避免主题继承异常导致个别字显示为系统默认字体。
+
+**验证（已确认生效）**：
+- 菜单、按钮、标签、弹窗等所有中文文字均显示为 Noto Serif SC 宋体。
+- “将鼠标移到屏幕顶部即可恢复菜单栏”提示保持原有竖排样式，且每个字都是标准简体宋体。
+- 按钮中的 emoji（↩、↪、⏸、💡、🔀、🔄）以及其它符号均能正常显示。

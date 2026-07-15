@@ -68,6 +68,7 @@ Use Godot's export presets (`Project > Export`) to build for Windows, macOS, Lin
 Main game controller attached to `game.tscn`. Responsibilities:
 
 - Tracks `GameState` (`PLAYING`, `GAME_OVER`)
+- Tracks `GameMode` (`CASUAL`, `COMPETITIVE`); competitive mode limits hints/shuffles per level
 - Maintains the 7×12 `board` array
 - Tracks `selected_index` for the first clicked tile
 - Implements move history with `move_history` and `undo_history` stacks for undo/redo
@@ -78,6 +79,8 @@ Key constants:
 
 - `ROWS := 7`, `COLS := 12`, `PAIRS := 42`
 - `DIRECTIONS` for 4-direction pathfinding
+- `COMPETITIVE_EARLY_HINTS / COMPETITIVE_EARLY_SHUFFLES` for levels 1–7
+- `COMPETITIVE_LATE_HINTS / COMPETITIVE_LATE_SHUFFLES` for levels 8–10
 
 ### `cell.gd`
 
@@ -90,7 +93,7 @@ Reusable cell component attached to `cell.tscn`. Responsibilities:
 
 ### Scenes
 
-- `game.tscn` — root scene with a `TileMapLayer` background, button bar (`Undo`, `Redo`, `Restart`), a `GridContainer` holding 84 `Cell` instances, and a game-over overlay.
+- `game.tscn` — root scene with a `TileMapLayer` background, menu bar (`Game`, `Options`, `Help`, `Skin`), mode label, time/score labels, info bar, button bar (`Undo`, `Redo`, `Hint`, `Shuffle`, `Restart`), a `GridContainer` holding 84 `Cell` instances, and a game-over overlay.
 - `cell.tscn` — panel-based cell with a `TextureRect` for icons.
 
 ## Code Style Guidelines
