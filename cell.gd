@@ -11,9 +11,102 @@ signal cell_clicked(index: int)
 # ------------------------------
 enum TileSkin {POKEMON, CLASSIC}
 
-const SKIN_PATHS := {
-	TileSkin.POKEMON: "res://assets/pokemon/normal/tile_%02d.png",
-	TileSkin.CLASSIC: "res://assets/classicPics/level3/normal/tile_%02d.png",
+# 通过 preload 显式声明所有图块纹理，确保导出时这些资源会被打包进 PCK。
+# 动态 load(path) 不会被 Godot 的导出依赖扫描识别，导致导出后只加载到
+# 已被其他场景引用的少量纹理（常见现象是图版只剩一个图案）。
+const POKEMON_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/pokemon/normal/tile_01.png"),
+	preload("res://assets/pokemon/normal/tile_02.png"),
+	preload("res://assets/pokemon/normal/tile_03.png"),
+	preload("res://assets/pokemon/normal/tile_04.png"),
+	preload("res://assets/pokemon/normal/tile_05.png"),
+	preload("res://assets/pokemon/normal/tile_06.png"),
+	preload("res://assets/pokemon/normal/tile_07.png"),
+	preload("res://assets/pokemon/normal/tile_08.png"),
+	preload("res://assets/pokemon/normal/tile_09.png"),
+	preload("res://assets/pokemon/normal/tile_10.png"),
+	preload("res://assets/pokemon/normal/tile_11.png"),
+	preload("res://assets/pokemon/normal/tile_12.png"),
+	preload("res://assets/pokemon/normal/tile_13.png"),
+	preload("res://assets/pokemon/normal/tile_14.png"),
+	preload("res://assets/pokemon/normal/tile_15.png"),
+	preload("res://assets/pokemon/normal/tile_16.png"),
+	preload("res://assets/pokemon/normal/tile_17.png"),
+	preload("res://assets/pokemon/normal/tile_18.png"),
+	preload("res://assets/pokemon/normal/tile_19.png"),
+	preload("res://assets/pokemon/normal/tile_20.png"),
+	preload("res://assets/pokemon/normal/tile_21.png"),
+	preload("res://assets/pokemon/normal/tile_22.png"),
+	preload("res://assets/pokemon/normal/tile_23.png"),
+	preload("res://assets/pokemon/normal/tile_24.png"),
+	preload("res://assets/pokemon/normal/tile_25.png"),
+	preload("res://assets/pokemon/normal/tile_26.png"),
+	preload("res://assets/pokemon/normal/tile_27.png"),
+	preload("res://assets/pokemon/normal/tile_28.png"),
+	preload("res://assets/pokemon/normal/tile_29.png"),
+	preload("res://assets/pokemon/normal/tile_30.png"),
+	preload("res://assets/pokemon/normal/tile_31.png"),
+	preload("res://assets/pokemon/normal/tile_32.png"),
+	preload("res://assets/pokemon/normal/tile_33.png"),
+	preload("res://assets/pokemon/normal/tile_34.png"),
+	preload("res://assets/pokemon/normal/tile_35.png"),
+	preload("res://assets/pokemon/normal/tile_36.png"),
+	preload("res://assets/pokemon/normal/tile_37.png"),
+	preload("res://assets/pokemon/normal/tile_38.png"),
+	preload("res://assets/pokemon/normal/tile_39.png"),
+	preload("res://assets/pokemon/normal/tile_40.png"),
+	preload("res://assets/pokemon/normal/tile_41.png"),
+	preload("res://assets/pokemon/normal/tile_42.png"),
+]
+
+const CLASSIC_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/classicPics/level3/normal/tile_01.png"),
+	preload("res://assets/classicPics/level3/normal/tile_02.png"),
+	preload("res://assets/classicPics/level3/normal/tile_03.png"),
+	preload("res://assets/classicPics/level3/normal/tile_04.png"),
+	preload("res://assets/classicPics/level3/normal/tile_05.png"),
+	preload("res://assets/classicPics/level3/normal/tile_06.png"),
+	preload("res://assets/classicPics/level3/normal/tile_07.png"),
+	preload("res://assets/classicPics/level3/normal/tile_08.png"),
+	preload("res://assets/classicPics/level3/normal/tile_09.png"),
+	preload("res://assets/classicPics/level3/normal/tile_10.png"),
+	preload("res://assets/classicPics/level3/normal/tile_11.png"),
+	preload("res://assets/classicPics/level3/normal/tile_12.png"),
+	preload("res://assets/classicPics/level3/normal/tile_13.png"),
+	preload("res://assets/classicPics/level3/normal/tile_14.png"),
+	preload("res://assets/classicPics/level3/normal/tile_15.png"),
+	preload("res://assets/classicPics/level3/normal/tile_16.png"),
+	preload("res://assets/classicPics/level3/normal/tile_17.png"),
+	preload("res://assets/classicPics/level3/normal/tile_18.png"),
+	preload("res://assets/classicPics/level3/normal/tile_19.png"),
+	preload("res://assets/classicPics/level3/normal/tile_20.png"),
+	preload("res://assets/classicPics/level3/normal/tile_21.png"),
+	preload("res://assets/classicPics/level3/normal/tile_22.png"),
+	preload("res://assets/classicPics/level3/normal/tile_23.png"),
+	preload("res://assets/classicPics/level3/normal/tile_24.png"),
+	preload("res://assets/classicPics/level3/normal/tile_25.png"),
+	preload("res://assets/classicPics/level3/normal/tile_26.png"),
+	preload("res://assets/classicPics/level3/normal/tile_27.png"),
+	preload("res://assets/classicPics/level3/normal/tile_28.png"),
+	preload("res://assets/classicPics/level3/normal/tile_29.png"),
+	preload("res://assets/classicPics/level3/normal/tile_30.png"),
+	preload("res://assets/classicPics/level3/normal/tile_31.png"),
+	preload("res://assets/classicPics/level3/normal/tile_32.png"),
+	preload("res://assets/classicPics/level3/normal/tile_33.png"),
+	preload("res://assets/classicPics/level3/normal/tile_34.png"),
+	preload("res://assets/classicPics/level3/normal/tile_35.png"),
+	preload("res://assets/classicPics/level3/normal/tile_36.png"),
+	preload("res://assets/classicPics/level3/normal/tile_37.png"),
+	preload("res://assets/classicPics/level3/normal/tile_38.png"),
+	preload("res://assets/classicPics/level3/normal/tile_39.png"),
+	preload("res://assets/classicPics/level3/normal/tile_40.png"),
+	preload("res://assets/classicPics/level3/normal/tile_41.png"),
+	preload("res://assets/classicPics/level3/normal/tile_42.png"),
+]
+
+const SKIN_TEXTURES := {
+	TileSkin.POKEMON: POKEMON_TEXTURES,
+	TileSkin.CLASSIC: CLASSIC_TEXTURES,
 }
 
 # 当前全局图版，所有格子共用
@@ -74,6 +167,11 @@ static func clear_texture_cache() -> void:
 	_texture_cache.clear()
 
 
+# 获取指定图版当前可用的纹理数量
+static func get_texture_count(skin: TileSkin = current_skin) -> int:
+	return SKIN_TEXTURES[skin].size()
+
+
 # 根据 tile_type 刷新图标显示
 func update_icon() -> void:
 	if tile_type == 0:
@@ -86,9 +184,11 @@ func update_icon() -> void:
 func _get_texture(type: int) -> Texture2D:
 	var cache_key := int(current_skin) * 1000 + type
 	if not _texture_cache.has(cache_key):
-		var path: String = SKIN_PATHS[current_skin] % type
-		var tex := load(path) as Texture2D
-		_texture_cache[cache_key] = tex
+		var textures: Array[Texture2D] = SKIN_TEXTURES[current_skin]
+		if type < 1 or type > textures.size():
+			_texture_cache[cache_key] = null
+		else:
+			_texture_cache[cache_key] = textures[type - 1]
 
 	return _texture_cache[cache_key]
 

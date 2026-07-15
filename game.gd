@@ -93,22 +93,13 @@ func _get_pairs() -> int:
 func _get_skin_tile_count(difficulty: int) -> int:
 	match Cell.current_skin:
 		Cell.TileSkin.CLASSIC:
-			# 经典图案素材已统一集中到 level3，所有难度共用
-			var path := "res://assets/classicPics/level3/normal/"
-			var dir := DirAccess.open(path)
-			if dir == null:
-				return _get_pairs_for_difficulty(difficulty, CLASSIC_LEVELS)
-			var count := 0
-			dir.list_dir_begin()
-			var file := dir.get_next()
-			while file != "":
-				if file.ends_with(".png") and not file.ends_with(".import"):
-					count += 1
-				file = dir.get_next()
-			dir.list_dir_end()
-			return maxi(count, 1)
+			# 经典图案素材已统一集中到 level3，所有难度共用。
+			# 直接返回 Cell 中预加载的纹理数量，避免导出后 DirAccess
+			# 扫描目录不可靠导致图块数量计算错误。
+			return Cell.get_texture_count(Cell.TileSkin.CLASSIC)
 		Cell.TileSkin.POKEMON:
-			return POKEMON_LEVELS[difficulty]["tile_count"]
+			# 防止配置的数量超过实际已打包的纹理数量
+			return mini(POKEMON_LEVELS[difficulty]["tile_count"], Cell.get_texture_count(Cell.TileSkin.POKEMON))
 	return _get_pairs()
 
 # 指定难度下完整棋盘应有的对数

@@ -1640,3 +1640,78 @@ cd assets/连连看例子
 **验证**：
 - 静态检查场景 BBCode 格式正确。
 - 建议启动 Godot 后验证：左侧恢复提示中“屏幕顶部”是否以更粗的黑边突出显示，而字体粗细与周围一致。
+
+
+---
+
+### 62. 修复导出后图版只剩一个图案的 Bug
+
+**时间**：2026-07-13  
+**涉及文件**：`cell.gd`、`game.gd`
+
+**原因**：`cell.gd` 原本使用动态 `load(path)` 根据 `tile_type` 运行时加载 `assets/pokemon/normal/tile_%02d.png` 或 `assets/classicPics/level3/normal/tile_%02d.png`。Godot 的导出依赖扫描只会把“显式引用”的资源打包进 PCK，动态拼接路径的 `load()` 不会被识别；导出后这些图块文件经常只有少量（甚至只有 1 张）被包含。结果表现为：
+- 经典图版在导出后整局只出现同一种图案；
+- 若 `game.gd` 通过 `DirAccess` 扫描目录，导出后也可能只能数到少量 `.png`，进一步导致棋盘生成时 `tile_count` 变成 1。
+
+**改动**：
+- 在 `cell.gd` 中用 `preload()` 显式预加载两套图版全部 42 张纹理（`POKEMON_TEXTURES`、`CLASSIC_TEXTURES`），并建立 `SKIN_TEXTURES` 映射表。
+- `_get_texture()` 改为从预加载数组中按索引取值，不再使用运行时 `load()`。
+- 新增 `Cell.get_texture_count(skin)` 静态方法，供外部查询当前图版实际可用的纹理数量。
+- 在 `game.gd` 的 `_get_skin_tile_count()` 中：
+  - 经典图版直接返回 `Cell.get_texture_count(Cell.TileSkin.CLASSIC)`，不再依赖导出后可能不可靠的 `DirAccess` 目录扫描。
+  - 宝可梦图版返回 `mini(POKEMON_LEVELS[difficulty]["tile_count"], Cell.get_texture_count(Cell.TileSkin.POKEMON))`，防止配置数量超过实际打包的纹理数量。
+
+**验证**：
+- 静态检查 `cell.gd` 中 84 条 `preload` 路径与项目目录一致。
+- 建议重新导出 Windows Desktop 版本后验证：
+  - 选择“经典图案”图版，棋盘是否出现 42 种不同图案；
+  - 选择“新版宝可梦”图版，图案是否同样正常；
+  - 切换难度、重新开始、切换图版后是否没有花屏或空白格。
+
+
+---
+
+### 63. 整理与压缩项目素材
+
+**时间**：2026-07-14  
+**涉及文件**：`assets/pokemon/normal/tile_*.png`、`assets/sound/喝彩鼓掌14秒.mp3`、
+`assets/pokemon/cell_spritesheet.png`、`assets/pokemon/tilemap_packed.png`、
+`dcss_tileset.png`、`tile_01_outlined_blackbg.png`、`tile_01_outlined_blackbg_scaled.png`、
+`rltiles-2d.json`、`session_33ec6a44-076f-4f88-b09e-79002ee0827a.zip`、
+`generate_spritesheet.py`、`outline_sprite.py`、`panel_container.tscn`、
+`__pycache__/`、`.venv/`、`AGENTS.md`
+
+**原因**：项目根目录和 `assets/` 下积累了大量未被代码引用的中间文件、测试资源、旧脚本和临时环境，导致仓库体积膨胀（`assets/pokemon` 单目录约 30 MB）；需要在保证游戏内显示品质与画质的前提下进行整合、压缩与清理。
+
+**改动**：
+
+- **压缩在用图块**：
+  - 对 `assets/pokemon/normal/tile_01.png` ~ `tile_42.png` 使用 LANCZOS 重采样等比缩放，最长边限制为 256 px，并保存为优化后的 PNG。
+  - 处理前：42 张图块共约 29.3 MB（最大单张 2713×2713）。
+  - 处理后：42 张图块共约 2.4 MB，画质足以覆盖棋盘格子在桌面和移动端的常见显示尺寸。
+  - 经典图块 `assets/classicPics/level3/normal/tile_*.png` 尺寸已为 39×39、总体仅 122 KB，保持原样。
+
+- **删除未使用资源**：
+  - `assets/pokemon/cell_spritesheet.png` 及其 `.import`
+  - `assets/pokemon/tilemap_packed.png` 及其 `.import`
+  - `dcss_tileset.png` 及其 `.import`
+  - `tile_01_outlined_blackbg.png` 及其 `.import`
+  - `tile_01_outlined_blackbg_scaled.png` 及其 `.import`
+  - `rltiles-2d.json`
+  - `session_33ec6a44-076f-4f88-b09e-79002ee0827a.zip`
+  - `assets/sound/喝彩鼓掌14秒.mp3` 及其 `.import`（代码中未被任何 `preload` 引用）
+  - `generate_spritesheet.py`、`outline_sprite.py`（旧辅助脚本，引用的文件结构已不存在）
+  - `panel_container.tscn`（空场景，未被引用）
+  - `__pycache__/`、`.venv/`（Python 临时缓存与虚拟环境，Godot 运行时不需要）
+
+- **更新文档**：
+  - `AGENTS.md`：修正项目结构示例，移除已删除的 `tilemap_packed.png`、`1.png`、`2.png`；更新 `cell.gd` 说明，删除“回退到 tilemap_packed.png 图集”的描述，改为当前两套 `preload` 图版路径。
+
+**验证**：
+- 全局搜索 `res://assets` 引用，确认仅剩余 `cell.gd` 中 84 条 `preload` 路径和 `game.gd` 中 10 条音频 `preload` 路径。
+- 检查被删除文件的 `.import` 也已同步移除，避免 Godot 残留失效引用。
+- 建议启动 Godot 编辑器后：
+  - 确认“新版宝可梦”和“经典图案”两种图版均正常显示 42 种图案；
+  - 确认无音频丢失、无花屏或空白格；
+  - 观察 `.godot/` 重新导入过程无报错。
+

@@ -21,9 +21,11 @@ This is a small **Godot 4** game project named **连连看** (Liánliánkàn). T
 ├── cell.tscn              # Cell component scene
 ├── icon.svg / icon.png    # Project icons
 ├── assets/
-│   ├── 1.png              # Example external tile icon
-│   ├── 2.png              # Example external tile icon
-│   └── tilemap_packed.png # Cell background / tileset atlas
+│   ├── pokemon/
+│   │   └── normal/        # 42 Pokemon tile icons (256×256, optimized PNG)
+│   ├── classicPics/
+│   │   └── level3/normal/ # 42 classic tile icons (39×39 PNG)
+│   └── sound/             # Sound effects and background music (MP3)
 ├── .editorconfig          # EditorConfig (UTF-8 only)
 ├── .gitattributes         # Normalize line endings to LF
 └── .gitignore             # Ignore .godot/ and /android/
@@ -84,7 +86,7 @@ Reusable cell component attached to `cell.tscn`. Responsibilities:
 - Emits `cell_clicked(index: int)` when left-clicked
 - Displays the appropriate icon based on `tile_type` (0 = empty)
 - Uses `class_name Cell` for typed references
-- Loads external `res://assets/{type}.png` when available; falls back to slicing `tilemap_packed.png` atlas
+- Preloads tile textures from `res://assets/pokemon/normal/` or `res://assets/classicPics/level3/normal/` depending on the active skin
 
 ### Scenes
 
