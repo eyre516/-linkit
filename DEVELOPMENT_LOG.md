@@ -2025,3 +2025,65 @@ cd assets/连连看例子
 - 菜单、按钮、标签、弹窗等所有中文文字均显示为 Noto Serif SC 宋体。
 - “将鼠标移到屏幕顶部即可恢复菜单栏”提示保持原有竖排样式，且每个字都是标准简体宋体。
 - 按钮中的 emoji（↩、↪、⏸、💡、🔀、🔄）以及其它符号均能正常显示。
+
+---
+
+### 75. 集成 Manager 完成 game.gd 拆分重构
+
+**时间**：2026-07-17  
+**涉及文件**：`game.gd`、`game.tscn`、`managers/audio_manager.gd`、`managers/board_manager.gd`、`managers/score_manager.gd`
+
+**原因**：`managers/` 目录下已存在三个管理器文件，但 `game.gd` 仍把所有逻辑内联在 2603 行里，结构臃肿、职责混杂。需要完成之前的拆分重构，将音频、棋盘/路径/坍塌、分数计时职责迁移到对应 Manager，并通过节点引用协作。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - `load_steps` 从 `9` 增加到 `12`。
+   - 新增三个 `ext_resource` 引用，分别指向 `managers/audio_manager.gd`、`managers/board_manager.gd`、`managers/score_manager.gd` 的 UID。
+   - 在 `Game` 根节点下新增 `AudioManager`、`BoardManager`、`ScoreManager` 三个 Node 子节点，并设置 `unique_name_in_owner = true`。
+
+2. **`managers/board_manager.gd`**：
+   - 新增 `pairs_left` 运行时变量。
+   - `generate_board()` 末尾设置 `pairs_left = pairs`。
+   - 新增 `eliminate(r1, c1, r2, c2)` 用于清除两个格子并递减对数。
+   - 新增 `get_state()` / `restore_state()` 用于撤销/重做时保存与恢复棋盘状态。
+   - `apply_collapse()` 的方向参数类型从 `Level2Dir`/`Level4Dir` 改为 `int`，避免与 `game.gd` 的同名枚举产生类型冲突。
+
+3. **`managers/score_manager.gd`**：
+   - 新增 `reset_combo()` 方法，用于撤销/重做后强制打断连击连续性。
+
+4. **`game.gd`**（主要变更）：
+   - 新增 `@onready` 引用 `audio_manager`、`board_manager`、`score_manager`。
+   - 删除已迁移到 Manager 的常量、状态变量与辅助函数：音频、棋盘尺寸、路径查找、坍塌、洗牌、分数、计时、连击等。
+   - `_ready()` 中调用 `board_manager.setup(...)` 传入必要节点，并调用 `board_manager.setup_grid(_on_cell_clicked)` 初始化网格。
+   - 连接 `score_manager.combo_changed` 信号到 `_update_combo_display()`，确保连击超时自动清零时 UI 同步刷新。
+   - 替换所有音频调用为 `audio_manager.play_sound(...)` / `audio_manager.play_random_bgm()` / `audio_manager.play_bgm(...)` / `audio_manager.stop_bgm()` 等。
+   - 替换所有棋盘调用为 `board_manager.get_rows()`、`board_manager.generate_board()`、`board_manager.can_connect(...)`、`board_manager.find_connection_path(...)`、`board_manager.apply_collapse(...)`、`board_manager.shuffle_remaining()` 等。
+   - 替换所有分数/计时访问为 `score_manager.score`、`score_manager.remaining_time`、`score_manager.total_game_time`、`score_manager.level_time`，并使用 `ScoreManager.format_time(...)`、`ScoreManager.MAX_TIME`、`ScoreManager.get_score_tier_color(...)` 等静态方法/常量。
+   - 重写 `_eliminate()`：保存棋盘与分数状态到撤销栈，调用 `board_manager.eliminate(...)` 与 `score_manager.record_elimination()`，返回 `time_since_last` 供外层播放不同成功音效。
+   - 重写 `_process()`：调用 `score_manager.update(delta)` 并统一刷新计时条与时间标签。
+   - 重写 `restart_game()`：调用 `score_manager.reset(reset_progress)` 与 `board_manager.generate_board()`。
+   - 重写撤销/重做：通过 `board_manager.get_state()/restore_state()` 与 `score_manager.get_state()/restore_state()` 恢复状态，并调用 `score_manager.reset_combo()` 重置连击。
+   - 文件行数从 2603 行降至约 1683 行。
+
+**验证**：
+
+- 使用 Godot 4.5.1 命令行 `Godot_v4.5.1-stable_mono_win64_console.exe --path . --headless --quit` 加载项目，成功打印 `game started!`，无脚本错误。
+- 静态检查 `game.gd` 中已无对已迁移内部函数/常量的引用。
+- 建议启动 Godot 编辑器后进一步验证：棋盘显示、两种图版切换、点击消除、路径绘制、撤销/重做、提示、洗牌、分数/连击/倒计时、暂停/设置/弹窗、竞技模式次数限制均保持原有行为。
+
+---
+
+### 76. 修复重构后棋盘棋子无法点击的问题
+
+**时间**：2026-07-17  
+**涉及文件**：`managers/board_manager.gd`
+
+**原因**：重构后发现棋盘上只有菜单和弹窗可点击，棋子点击无反应。原因是 `BoardManager.setup_grid()` 中把格子点击信号连接成了 `cell.cell_clicked.connect(click_callback.bind(i))`，而 `Cell` 自身发射 `cell_clicked` 信号时已经通过 `get_index()` 传入了正确索引，导致回调 `_on_cell_clicked(index)` 实际收到两个参数（绑定索引 + 信号索引），函数调用失败，棋子点击被静默忽略。
+
+**改动**：
+- `managers/board_manager.gd` 第 105 行：将 `cell.cell_clicked.connect(click_callback.bind(i))` 改为 `cell.cell_clicked.connect(click_callback)`，让 `Cell` 自己发射的索引直接传给 `game.gd` 的 `_on_cell_clicked(index)`。
+
+**验证**：
+- 使用 Godot 4.5.1 命令行 `--headless --quit` 重新加载项目，无脚本错误。
+- 建议在 Godot 编辑器中运行并点击棋盘棋子，确认可选中、可消除、错误点击可切换选中。

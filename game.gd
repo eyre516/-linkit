@@ -1,40 +1,19 @@
 extends Control
 
-# 主游戏控制器：管理 7×12 连连看棋盘、倒计时、路径匹配、UI 交互与胜负判定。
+# 主游戏控制器：管理 UI 交互、菜单、弹窗、游戏流程与三个 Manager 的协作。
 
 enum GameState {PLAYING, GAME_OVER}
 enum GameMode {CASUAL, COMPETITIVE}
 
 # ------------------------------
 # 模块：游戏常量
-# 说明：棋盘尺寸、移动方向、关卡与倒计时相关常量
+# 说明：关卡名称、竞技模式限制、UI 自动隐藏与加分反馈常量
 # ------------------------------
-# 默认棋盘尺寸（宝可梦图版 / 经典高级难度使用）
-const ROWS := 7
-const COLS := 12
-const PAIRS := 42
-const MIN_MATCHABLE_PAIRS := 5
-const DIRECTIONS := [Vector2i(-1, 0), Vector2i(0, 1), Vector2i(1, 0), Vector2i(0, -1)]
-
-# 经典图版各难度的棋盘尺寸（行, 列）与图块文件夹
-const CLASSIC_LEVELS := {
-	1: {"rows": 7, "cols": 12, "folder": "level1"},
-	2: {"rows": 8, "cols": 14, "folder": "level2"},
-	3: {"rows": 9, "cols": 16, "folder": "level3"},
-}
-
-# 宝可梦图版各难度的棋盘尺寸与图块数量
-const POKEMON_LEVELS := {
-	1: {"rows": 6, "cols": 10, "tile_count": 14},
-	2: {"rows": 8, "cols": 12, "tile_count": 28},
-	3: {"rows": 8, "cols": 14, "tile_count": 42},
-}
-
 const LEVEL_NAMES := {
 	1: "不变",
 	2: "向左/右",
-	3: "向上/下",
-	4: "向外扩",
+	3: "向外扩",
+	4: "向上/下",
 	5: "向内聚",
 	6: "向左右扩",
 	7: "向上下扩",
@@ -46,29 +25,6 @@ const LEVEL_NAMES := {
 enum Level2Dir {LEFT, RIGHT}
 enum Level4Dir {UP, DOWN}
 
-const MAX_TIME := 60.0
-const TIME_BONUS := 15.0
-
-# 棋盘整体缩放比例：1.0 表示棋盘占满可用空间，让棋子尽可能大
-const BOARD_SCALE := 0.95
-
-const CLICK_SOUND := preload("res://assets/sound/普通点击miao.mp3")
-const SUCCESS_SOUND := preload("res://assets/sound/连接正确small-victory.mp3")
-const SUCCESS_SLOW_SOUND := preload("res://assets/sound/连接正确但10秒间隔以上.mp3")
-const ERROR_SOUND := preload("res://assets/sound/error.mp3")
-const GAME_WON_SOUND := preload("res://assets/sound/game-won.mp3")
-const LEVEL_COMPLETE_MUSIC := preload("res://assets/sound/欢乐音乐17秒（用于关卡顺利完成.mp3")
-const LEVEL_VICTORY_SOUND := preload("res://assets/sound/胜利两秒（用于中间关卡胜利）.mp3")
-const GAME_OVER_SOUND := preload("res://assets/sound/游戏结束.mp3")
-const FIREWORKS_SCENE := preload("res://fireworks.tscn")
-const EMOJI_FONT := preload("res://assets/fonts/NotoColorEmoji.ttf")
-const BGM_TRACKS: Array[AudioStream] = [
-	preload("res://assets/sound/背景音乐之欢快钢琴21秒.mp3"),
-	preload("res://assets/sound/背景音乐之吉他40秒音乐.mp3")
-]
-# 背景音乐相对主音量的缩放比例（0.5 表示背景音乐为主音量的一半）
-const BGM_VOLUME_SCALE := 0.35
-
 # 竞技模式每关可用的提示与洗牌次数
 const COMPETITIVE_EARLY_LEVELS := 7
 const COMPETITIVE_EARLY_HINTS := 5
@@ -76,54 +32,32 @@ const COMPETITIVE_EARLY_SHUFFLES := 2
 const COMPETITIVE_LATE_HINTS := 8
 const COMPETITIVE_LATE_SHUFFLES := 3
 
-# ------------------------------
-# 模块：棋盘尺寸与图块数量 —— 根据当前图版和难度动态计算
-# ------------------------------
-func _get_rows() -> int:
-	match Cell.current_skin:
-		Cell.TileSkin.CLASSIC:
-			return CLASSIC_LEVELS[current_difficulty]["rows"]
-		Cell.TileSkin.POKEMON:
-			return POKEMON_LEVELS[current_difficulty]["rows"]
-	return ROWS
+# 背景音乐相对主音量的缩放比例（0.5 表示背景音乐为主音量的一半）
+const BGM_VOLUME_SCALE := 0.35
 
-func _get_cols() -> int:
-	match Cell.current_skin:
-		Cell.TileSkin.CLASSIC:
-			return CLASSIC_LEVELS[current_difficulty]["cols"]
-		Cell.TileSkin.POKEMON:
-			return POKEMON_LEVELS[current_difficulty]["cols"]
-	return COLS
+const FIREWORKS_SCENE := preload("res://fireworks.tscn")
+const EMOJI_FONT := preload("res://assets/fonts/NotoColorEmoji.ttf")
 
-func _get_pairs() -> int:
-	return int((_get_rows() * _get_cols()) / 2.0)
+# 顶部 UI 自动隐藏相关常量
+const AUTO_HIDE_DELAY := 5.0          # 游戏开始后多久自动隐藏顶部 UI
+const TOP_TRIGGER_HEIGHT := 24.0      # 鼠标移到屏幕顶部多少像素内触发显示
+const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 UI
 
-# 读取当前图版对应难度下实际要使用的图块数量
-func _get_skin_tile_count(difficulty: int) -> int:
-	match Cell.current_skin:
-		Cell.TileSkin.CLASSIC:
-			# 经典图案素材已统一集中到 level3，所有难度共用。
-			# 直接返回 Cell 中预加载的纹理数量，避免导出后 DirAccess
-			# 扫描目录不可靠导致图块数量计算错误。
-			return Cell.get_texture_count(Cell.TileSkin.CLASSIC)
-		Cell.TileSkin.POKEMON:
-			# 防止配置的数量超过实际已打包的纹理数量
-			return mini(POKEMON_LEVELS[difficulty]["tile_count"], Cell.get_texture_count(Cell.TileSkin.POKEMON))
-	return _get_pairs()
+# 加分反馈相关常量
+const SCHEME_1_FLOATING_TEXT_ENABLED := true  # 方案 1：消除位置飘字（可独立开关）
+const AUTO_HIDE_HINT_MAX := 1           # 每局游戏最多显示几次恢复提示
 
-# 指定难度下完整棋盘应有的对数
-func _get_pairs_for_difficulty(difficulty: int, levels: Dictionary = CLASSIC_LEVELS) -> int:
-	return int((levels[difficulty]["rows"] * levels[difficulty]["cols"]) / 2.0)
+# 自定义弹窗类型与回调
+enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, MODE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT}
+var _current_dialog_type: DialogType = DialogType.WELCOME
+var _dialog_callback: Callable = Callable()
 
 # ------------------------------
 # 模块：游戏状态与运行数据
-# 说明：当前对局状态、棋盘数据、选中索引、历史记录、设置等
+# 说明：当前对局状态、选中索引、历史记录、竞技模式次数等
 # ------------------------------
 var game_state: GameState
-var board: Array = []
 var selected_index: int = -1
-var pairs_left: int = 0
-var remaining_time: float = MAX_TIME
 
 var move_history: Array[Dictionary] = []
 var undo_history: Array[Dictionary] = []
@@ -140,35 +74,12 @@ var _top_leave_time: float = 0.0
 var _auto_hide_hint_count: int = 0
 var _hint_flash_tween: Tween = null
 
-var _last_points: int = 0
-var _combo_count: int = 0
-
-const AUTO_HIDE_HINT_MAX := 1           # 每局游戏最多显示几次恢复提示
-
 # 鼠标按键状态（用于左右键同时按下的洗牌快捷键）
 var _left_mouse_pressed: bool = false
 var _right_mouse_pressed: bool = false
 var _left_press_time: int = 0
 var _right_press_time: int = 0
 const MOUSE_COMBO_WINDOW_MS := 150
-
-# 顶部 UI 自动隐藏相关常量
-const AUTO_HIDE_DELAY := 5.0          # 游戏开始后多久自动隐藏顶部 UI
-const TOP_TRIGGER_HEIGHT := 24.0      # 鼠标移到屏幕顶部多少像素内触发显示
-const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 UI
-
-# 加分反馈相关常量
-const SCHEME_1_FLOATING_TEXT_ENABLED := true  # 方案 1：消除位置飘字（可独立开关）
-const COMBO_FAST_THRESHOLD := 10.0            # 多少秒内消除算一次连击
-const SCORE_COLOR_GOLD := "#FFD700"
-const SCORE_COLOR_SILVER := "#E0E0E0"
-const SCORE_COLOR_BRONZE := "#FF8C00"
-const SCORE_COLOR_NORMAL := "#FFFFFF"
-
-# 自定义弹窗类型与回调
-enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, MODE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT}
-var _current_dialog_type: DialogType = DialogType.WELCOME
-var _dialog_callback: Callable = Callable()
 
 # 当前难度：1=初级，2=中级，3=高级
 var current_level: int = 1
@@ -195,21 +106,19 @@ const SETTINGS_FILE := "user://settings.json"
 # 关卡完成弹窗待进入的下一关
 var _pending_next_level: int = -1
 
-# 分数与计时
-var score: int = 0
-var total_game_time: float = 0.0
-var level_time: float = 0.0
-var _last_eliminate_time: float = -1.0
-# 音效与背景音乐开关
+# 音量与开关（游戏主控保存真实值，AudioManager 执行）
 var sound_effects_enabled: bool = true
 var background_music_enabled: bool = true
-# 音量：0.0 ~ 1.0
 var master_volume: float = 0.8
 var sfx_volume: float = 0.8
 var bgm_volume: float = 0.5
 
-var _audio_player: AudioStreamPlayer
-var _bgm_player: AudioStreamPlayer
+# ------------------------------
+# 模块：Manager 引用
+# ------------------------------
+@onready var audio_manager: AudioManager = %AudioManager
+@onready var board_manager: BoardManager = %BoardManager
+@onready var score_manager: ScoreManager = %ScoreManager
 
 # ------------------------------
 # 模块：UI 节点引用
@@ -287,25 +196,15 @@ var _score_popup_tweens: Array[Tween] = []
 
 # 模块：生命周期 —— 初始化音频、棋盘、菜单与游戏
 func _ready() -> void:
-	_audio_player = AudioStreamPlayer.new()
-	add_child(_audio_player)
-
-	_bgm_player = AudioStreamPlayer.new()
-	_bgm_player.stream = null
-	add_child(_bgm_player)
-
-	# 设置背景音乐单曲循环
-	for track: AudioStream in BGM_TRACKS:
-		track.loop = true
-
 	# 为主题默认字体（NotoSerifSC）添加 Emoji 回退，确保按钮中的 emoji 正常显示
 	var sc_font: FontFile = load("res://assets/fonts/NotoSerifSC-Regular.otf")
 	if sc_font != null:
 		sc_font.fallbacks = [EMOJI_FONT]
 
 	randomize()
+	board_manager.setup(grid_container, aspect_ratio_container, board_center, cell_scene)
 	Cell.set_level(current_difficulty)
-	_setup_grid()
+	board_manager.setup_grid(_on_cell_clicked)
 	_setup_menus()
 	_load_leaderboard()
 	restart_game()
@@ -315,8 +214,7 @@ func _ready() -> void:
 	dialog_name_input.text_submitted.connect(_on_name_input_submitted)
 	shuffle_button.pressed.connect(_on_shuffle_button_pressed)
 	pause_button.pressed.connect(_toggle_pause)
-	ui_hide_timer.timeout.connect(_on_ui_hide_timer_timeout)
-	hint_hide_timer.timeout.connect(_on_hint_hide_timer_timeout)
+	# UIHideTimer / HintHideTimer 的 timeout 信号已在 game.tscn 中连接
 
 	# 排行榜弹窗按钮
 	leaderboard_tab_buttons[0].pressed.connect(_on_leaderboard_tab_pressed.bind(1))
@@ -361,6 +259,9 @@ func _ready() -> void:
 	%NextPageButton.focus_mode = Control.FOCUS_NONE
 	%LeaderboardCloseButton.focus_mode = Control.FOCUS_NONE
 
+	# 连击数变化时刷新连击显示（含超时自动清零）
+	score_manager.combo_changed.connect(func(_count: int) -> void: _update_combo_display())
+
 	# 加载持久化设置
 	_load_settings()
 
@@ -388,8 +289,7 @@ func _update_level_info() -> void:
 
 # 刷新剩余对数显示
 func _update_pairs_label() -> void:
-	remaining_pairs_label.text = "[color=#8C5C33]剩余：[/color][color=#264D61]%d[/color]" % pairs_left
-
+	remaining_pairs_label.text = "[color=#8C5C33]剩余：[/color][color=#264D61]%d[/color]" % board_manager.pairs_left
 
 
 # 获取关卡名称
@@ -452,7 +352,7 @@ func _advance_level() -> void:
 # 关卡完成后的统一处理
 func _on_level_complete() -> void:
 	# 播放胜利音效
-	_play_sound(GAME_WON_SOUND)
+	audio_manager.play_sound(AudioManager.GAME_WON_SOUND)
 	_show_full_ui()
 	if _is_final_level():
 		# 最终关卡胜利时播放烟花庆祝
@@ -467,10 +367,8 @@ func _show_final_victory() -> void:
 	game_state = GameState.GAME_OVER
 	_timer_running = false
 	# 用背景音乐播放器播放通关庆祝音乐，避免覆盖胜利音效
-	_bgm_player.stop()
-	_bgm_player.stream = LEVEL_COMPLETE_MUSIC
-	_bgm_player.volume_db = linear_to_db(master_volume * bgm_volume)
-	_bgm_player.play()
+	audio_manager.stop_bgm()
+	audio_manager.play_bgm(AudioManager.LEVEL_COMPLETE_MUSIC)
 	_show_name_input_dialog()
 
 
@@ -498,11 +396,11 @@ func _on_name_input_submitted(text: String) -> void:
 # 显示最终胜利标签
 func _display_final_victory_label() -> void:
 	if current_difficulty == 1:
-		game_over_label.text = "初级通关！\n总分：%d\n总用时：%s" % [score, _format_time(total_game_time)]
+		game_over_label.text = "初级通关！\n总分：%d\n总用时：%s" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
 	elif current_difficulty == 2:
-		game_over_label.text = "中级通关！\n总分：%d\n总用时：%s" % [score, _format_time(total_game_time)]
+		game_over_label.text = "中级通关！\n总分：%d\n总用时：%s" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
 	else:
-		game_over_label.text = "高级通关！\n总分：%d\n总用时：%s" % [score, _format_time(total_game_time)]
+		game_over_label.text = "高级通关！\n总分：%d\n总用时：%s" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
 	game_over_panel.show()
 
 
@@ -548,9 +446,9 @@ func _add_leaderboard_entry(player_name: String) -> void:
 	entries.append({
 		"name": player_name,
 		"date": date_str,
-		"time": _format_time(total_game_time),
-		"time_seconds": int(total_game_time),
-		"score": score
+		"time": ScoreManager.format_time(score_manager.total_game_time),
+		"time_seconds": int(score_manager.total_game_time),
+		"score": score_manager.score
 	})
 	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if a["score"] != b["score"]:
@@ -698,49 +596,23 @@ func _on_level_complete_confirmed() -> void:
 	restart_game(false)
 
 
-# 播放音效（受音效开关、主音量与音效音量控制）
-func _play_sound(stream: AudioStream) -> void:
-	if not sound_effects_enabled:
-		return
-	_audio_player.volume_db = linear_to_db(master_volume * sfx_volume)
-	_audio_player.stream = stream
-	_audio_player.play()
-
-
-# 刷新背景音乐播放状态
-func _update_background_music() -> void:
-	if _bgm_player.stream == null:
-		return
-	_bgm_player.volume_db = linear_to_db(master_volume * bgm_volume)
-	if background_music_enabled:
-		if not _bgm_player.playing:
-			_bgm_player.play()
-	else:
-		_bgm_player.stop()
-
-
-# 随机挑选一首背景音乐并开始播放
-func _play_random_bgm() -> void:
-	var track: AudioStream = BGM_TRACKS[randi() % BGM_TRACKS.size()]
-	_bgm_player.stop()
-	_bgm_player.stream = track
-	_update_background_music()
-
-
 # 模块：设置 —— 从文件加载音量与开关状态
 func _load_settings() -> void:
 	if not FileAccess.file_exists(SETTINGS_FILE):
 		_apply_settings_to_ui()
+		audio_manager.configure(master_volume, sfx_volume, bgm_volume, sound_effects_enabled, background_music_enabled)
 		return
 	var file := FileAccess.open(SETTINGS_FILE, FileAccess.READ)
 	if file == null:
 		_apply_settings_to_ui()
+		audio_manager.configure(master_volume, sfx_volume, bgm_volume, sound_effects_enabled, background_music_enabled)
 		return
 	var json := JSON.new()
 	var error := json.parse(file.get_as_text())
 	file.close()
 	if error != OK:
 		_apply_settings_to_ui()
+		audio_manager.configure(master_volume, sfx_volume, bgm_volume, sound_effects_enabled, background_music_enabled)
 		return
 	var data = json.data
 	if data is Dictionary:
@@ -750,7 +622,7 @@ func _load_settings() -> void:
 		sound_effects_enabled = data.get("sound_effects_enabled", sound_effects_enabled)
 		background_music_enabled = data.get("background_music_enabled", background_music_enabled)
 	_apply_settings_to_ui()
-	_update_background_music()
+	audio_manager.configure(master_volume, sfx_volume, bgm_volume, sound_effects_enabled, background_music_enabled)
 
 
 # 模块：设置 —— 保存音量与开关状态到文件
@@ -802,7 +674,7 @@ func _apply_settings_to_ui() -> void:
 func _on_master_volume_slider_changed(value: float) -> void:
 	master_volume = value
 	master_value_label.text = "%d%%" % int(value * 100)
-	_update_background_music()
+	audio_manager.set_volumes(master_volume, sfx_volume, bgm_volume)
 	_save_settings()
 
 
@@ -810,6 +682,7 @@ func _on_master_volume_slider_changed(value: float) -> void:
 func _on_sfx_volume_slider_changed(value: float) -> void:
 	sfx_volume = value
 	sfx_value_label.text = "%d%%" % int(value * 100)
+	audio_manager.set_volumes(master_volume, sfx_volume, bgm_volume)
 	_save_settings()
 
 
@@ -817,20 +690,21 @@ func _on_sfx_volume_slider_changed(value: float) -> void:
 func _on_bgm_volume_slider_changed(value: float) -> void:
 	bgm_volume = value
 	bgm_value_label.text = "%d%%" % int(value * 100)
-	_update_background_music()
+	audio_manager.set_volumes(master_volume, sfx_volume, bgm_volume)
 	_save_settings()
 
 
 # 模块：设置 —— 音效开关变化
 func _on_sfx_mute_toggled(pressed: bool) -> void:
 	sound_effects_enabled = pressed
+	audio_manager.set_sfx_enabled(sound_effects_enabled)
 	_save_settings()
 
 
 # 模块：设置 —— 背景音乐开关变化
 func _on_bgm_mute_toggled(pressed: bool) -> void:
 	background_music_enabled = pressed
-	_update_background_music()
+	audio_manager.set_bgm_enabled(background_music_enabled)
 	_save_settings()
 
 
@@ -857,26 +731,6 @@ func _on_settings_button_pressed() -> void:
 # 设置面板：关闭按钮
 func _on_close_settings_button_pressed() -> void:
 	_close_settings_panel()
-
-
-# 模块：网格与显示 —— 生成棋盘格子并绑定点击事件
-func _setup_grid() -> void:
-	var rows := _get_rows()
-	var cols := _get_cols()
-	grid_container.columns = cols
-	aspect_ratio_container.ratio = float(cols) / float(rows)
-
-	for child in grid_container.get_children():
-		grid_container.remove_child(child)
-		child.queue_free()
-
-	for i in range(rows * cols):
-		var cell: Cell = cell_scene.instantiate()
-		grid_container.add_child(cell)
-		cell.cell_clicked.connect(_on_cell_clicked)
-
-	board_center.resized.connect(_on_grid_resized)
-	_on_grid_resized()
 
 
 # 模块：菜单栏 —— 配置游戏、选项、帮助三个下拉菜单
@@ -971,7 +825,7 @@ func _on_game_menu_item_pressed(index: int) -> void:
 	current_difficulty = index - 1
 	Cell.set_level(current_difficulty)
 	Cell.clear_texture_cache()
-	_setup_grid()
+	board_manager.setup_grid(_on_cell_clicked)
 	restart_game()
 
 
@@ -998,12 +852,9 @@ func _on_level_menu_item_pressed(index: int) -> void:
 	# 难度变化时重新设置棋盘网格
 	Cell.set_level(current_difficulty)
 	Cell.clear_texture_cache()
-	_setup_grid()
+	board_manager.setup_grid(_on_cell_clicked)
 	# 跳转到指定关卡，重置本局分数与时间，但保留选中的关卡编号
-	score = 0
-	total_game_time = 0.0
-	level_time = 0.0
-	_last_eliminate_time = -1.0
+	score_manager.reset(true)
 	restart_game(false)
 
 
@@ -1014,12 +865,13 @@ func _on_options_menu_item_pressed(index: int) -> void:
 		0:
 			sound_effects_enabled = not sound_effects_enabled
 			popup.set_item_checked(0, sound_effects_enabled)
+			audio_manager.set_sfx_enabled(sound_effects_enabled)
 			_apply_settings_to_ui()
 			_save_settings()
 		1:
 			background_music_enabled = not background_music_enabled
 			popup.set_item_checked(1, background_music_enabled)
-			_update_background_music()
+			audio_manager.set_bgm_enabled(background_music_enabled)
 			_apply_settings_to_ui()
 			_save_settings()
 		5:
@@ -1034,7 +886,7 @@ func _on_master_volume_menu_item_pressed(index: int) -> void:
 		2: master_volume = 0.5
 		3: master_volume = 0.75
 		4: master_volume = 1.0
-	_update_background_music()
+	audio_manager.set_volumes(master_volume, sfx_volume, bgm_volume)
 	_apply_settings_to_ui()
 	_save_settings()
 
@@ -1047,6 +899,7 @@ func _on_sfx_volume_menu_item_pressed(index: int) -> void:
 		2: sfx_volume = 0.5
 		3: sfx_volume = 0.75
 		4: sfx_volume = 1.0
+	audio_manager.set_volumes(master_volume, sfx_volume, bgm_volume)
 	_apply_settings_to_ui()
 	_save_settings()
 
@@ -1059,7 +912,7 @@ func _on_bgm_volume_menu_item_pressed(index: int) -> void:
 		2: bgm_volume = 0.5
 		3: bgm_volume = 0.75
 		4: bgm_volume = 1.0
-	_update_background_music()
+	audio_manager.set_volumes(master_volume, sfx_volume, bgm_volume)
 	_apply_settings_to_ui()
 	_save_settings()
 
@@ -1094,7 +947,7 @@ func _on_skin_menu_item_pressed(index: int) -> void:
 	Cell.set_level(current_difficulty)
 	Cell.clear_texture_cache()
 	_update_skin_menu_check()
-	_setup_grid()
+	board_manager.setup_grid(_on_cell_clicked)
 	restart_game(false)
 
 
@@ -1108,36 +961,6 @@ func _update_skin_menu_check() -> void:
 			popup.set_item_checked(0, true)
 		Cell.TileSkin.CLASSIC:
 			popup.set_item_checked(1, true)
-		#Cell.TileSkin.LifeItems:
-			#popup.set_item_checked(2,true)
-
-
-# 模块：网格与显示 —— 根据可用空间计算 80% 大小的棋盘，并让格子自适应
-func _on_grid_resized() -> void:
-	var available_size := board_center.size
-	if available_size.x <= 0 or available_size.y <= 0:
-		return
-
-	var rows := _get_rows()
-	var cols := _get_cols()
-	var h_sep: int = grid_container.get_theme_constant("h_separation")
-	var v_sep: int = grid_container.get_theme_constant("v_separation")
-
-	# 目标棋盘区域为父容器可用空间的 80%
-	var target_size := available_size * BOARD_SCALE
-
-	var cell_w: float = (target_size.x - (cols - 1) * h_sep) / cols
-	var cell_h: float = (target_size.y - (rows - 1) * v_sep) / rows
-	var cell_size: float = min(cell_w, cell_h)
-
-	for child in grid_container.get_children():
-		child.custom_minimum_size = Vector2(cell_size, cell_size)
-
-	# 同步设置棋盘容器尺寸，使其在 CenterContainer 中居中显示
-	aspect_ratio_container.custom_minimum_size = Vector2(
-		cols * cell_size + (cols - 1) * h_sep,
-		rows * cell_size + (rows - 1) * v_sep
-	)
 
 
 # 显示自定义弹窗（居中的欢迎面板样式）
@@ -1275,23 +1098,15 @@ func _process(delta: float) -> void:
 	if _is_paused or not _timer_running or game_state != GameState.PLAYING:
 		return
 
-	remaining_time -= delta
-	total_game_time += delta
-	level_time += delta
-	if remaining_time <= 0.0:
-		remaining_time = 0.0
-		_timer_running = false
-		_on_time_up()
-
-	# 超过 10 秒未消除，连击清零
-	if _last_eliminate_time >= 0 and (total_game_time - _last_eliminate_time) > COMBO_FAST_THRESHOLD:
-		if _combo_count != 0:
-			_combo_count = 0
-			_update_combo_display()
+	var time_up := score_manager.update(delta)
 
 	_update_timer_bar()
 	_update_time_labels()
 	_update_ui_visibility(delta)
+
+	if time_up:
+		_timer_running = false
+		_on_time_up()
 
 
 # 时间耗尽：显示结束语并播放失败音效
@@ -1299,7 +1114,7 @@ func _on_time_up() -> void:
 	game_state = GameState.GAME_OVER
 	game_over_label.text = "时间结束~欢迎游玩，下次再接再厉！"
 	game_over_panel.show()
-	_play_sound(GAME_OVER_SOUND)
+	audio_manager.play_sound(AudioManager.GAME_OVER_SOUND)
 	_show_full_ui()
 
 
@@ -1370,10 +1185,10 @@ func _show_full_ui() -> void:
 
 # 刷新紧凑顶部 UI 的倒计时条、本关用时与分数
 func _update_compact_ui() -> void:
-	compact_timer_bar.max_value = MAX_TIME
-	compact_timer_bar.value = remaining_time
-	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % _format_time(level_time)
-	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
+	compact_timer_bar.max_value = ScoreManager.MAX_TIME
+	compact_timer_bar.value = score_manager.remaining_time
+	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.level_time)
+	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score_manager.score
 
 
 # 游戏开始 5 秒后尝试切换到紧凑 UI；若鼠标正在屏幕顶部则保持完整 UI
@@ -1404,18 +1219,16 @@ func restart_game(reset_progress: bool = true) -> void:
 	game_over_panel.hide()
 	custom_dialog.hide()
 	selected_index = -1
-	pairs_left = _get_pairs()
-	remaining_time = MAX_TIME
 	_timer_running = true
 	move_history.clear()
 	undo_history.clear()
-	level_time = 0.0
 	_pending_next_level = -1
 	_ui_hidden = false
 	_top_leave_time = 0.0
 	_auto_hide_hint_count = 0
-	_combo_count = 0
-	_update_combo_display()
+
+	score_manager.reset(reset_progress)
+	board_manager.generate_board()
 
 	# 根据当前模式设置提示与洗牌次数
 	if current_mode == GameMode.COMPETITIVE:
@@ -1440,36 +1253,30 @@ func restart_game(reset_progress: bool = true) -> void:
 	ui_hide_timer.stop()
 	ui_hide_timer.start(AUTO_HIDE_DELAY)
 
-	if reset_progress:
-		total_game_time = 0.0
-		score = 0
-		_last_eliminate_time = -1.0
-
 	if current_level == 2:
 		_roll_level2_direction()
 	if current_level == 4:
 		_roll_level4_direction()
 
-	_generate_board()
-	_update_all_cells()
+	board_manager.update_all_cells(selected_index)
 	_update_ui()
 	_update_timer_bar()
 	_set_paused(false)
 	_update_level_info()
 	_update_time_labels()
 	_update_score_label()
-	_play_random_bgm()
+	audio_manager.play_random_bgm()
 	print("game started!")
 
 
 # 同步倒计时进度条的最大值与当前值，最后 10 秒触发脉冲闪烁
 func _update_timer_bar() -> void:
-	timer_bar.max_value = MAX_TIME
-	timer_bar.value = remaining_time
-	compact_timer_bar.max_value = MAX_TIME
-	compact_timer_bar.value = remaining_time
+	timer_bar.max_value = ScoreManager.MAX_TIME
+	timer_bar.value = score_manager.remaining_time
+	compact_timer_bar.max_value = ScoreManager.MAX_TIME
+	compact_timer_bar.value = score_manager.remaining_time
 
-	var should_pulse := remaining_time <= 10.0 and remaining_time > 0.0 \
+	var should_pulse := score_manager.remaining_time <= 10.0 and score_manager.remaining_time > 0.0 \
 		and game_state == GameState.PLAYING and _timer_running and not _is_paused
 	if should_pulse and _timer_pulse_tween == null:
 		_timer_pulse_tween = _create_timer_pulse_tween(timer_bar)
@@ -1493,59 +1300,359 @@ func _create_timer_pulse_tween(bar: ProgressBar) -> Tween:
 	return tween
 
 
-# 生成随机棋盘，并确保至少存在一对可消除的牌
-func _generate_board() -> void:
-	var rows := _get_rows()
-	var cols := _get_cols()
-	var pairs := _get_pairs()
-	var tile_count := pairs
-
-	# 根据当前图版和难度，使用对应文件夹里的实际图块数量
-	tile_count = mini(_get_skin_tile_count(current_difficulty), pairs)
-
-	var tiles: Array[int] = []
-	# 先为每种图块生成一对
-	for type in range(1, tile_count + 1):
-		tiles.append(type)
-		tiles.append(type)
-
-	# 如果棋盘格数多于已有对数，循环补充成对的图块，确保所有图块成对出现
-	var next_type := 1
-	while tiles.size() < rows * cols:
-		tiles.append(next_type)
-		tiles.append(next_type)
-		next_type = next_type % tile_count + 1
-
-	# 随机洗牌并确保至少存在指定数量可消除的对
-	var required := mini(MIN_MATCHABLE_PAIRS, pairs_left)
-	var attempts := 0
-	while true:
-		tiles.shuffle()
-		board.clear()
-		for r in range(rows):
-			board.append([])
-			for c in range(cols):
-				board[r].append(tiles[r * cols + c])
-
-		if _count_matchable_pairs(required) >= required:
-			break
-
-		attempts += 1
-		if attempts > 2000:
-			push_warning("未能在 2000 次尝试内生成含 %d 对可消除牌的棋盘" % required)
-			break
+# 刷新时间显示
+func _update_time_labels() -> void:
+	time_label.text = "[color=#8C5C33]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % [ScoreManager.format_time(score_manager.total_game_time), ScoreManager.format_time(score_manager.level_time)]
+	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.level_time)
 
 
-# 刷新所有格子的图案与选中状态
-func _update_all_cells() -> void:
-	var rows := _get_rows()
-	var cols := _get_cols()
-	for i in range(rows * cols):
-		var cell: Cell = grid_container.get_child(i)
-		var r := int(float(i) / cols)
-		var c := i % cols
-		cell.tile_type = board[r][c]
-		cell.selected = (i == selected_index)
+# 刷新分数显示
+func _update_score_label() -> void:
+	score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score_manager.score
+	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score_manager.score
+
+
+# 分数标签大小变化时同步缩放中心
+func _on_score_label_resized() -> void:
+	score_label.pivot_offset = score_label.size / 2.0
+
+
+func _emphasize_score_label(points: int = 0) -> void:
+	var tier_color := ScoreManager.get_score_tier_color(points)
+
+	# 根据当前显示模式，脉冲对应的分数标签
+	var visible_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
+	visible_score_label.pivot_offset = visible_score_label.size / 2.0
+
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(visible_score_label, "scale", Vector2(1.4, 1.4), 0.12)
+	tween.tween_property(visible_score_label, "modulate", tier_color, 0.12)
+
+	var tween_back := create_tween()
+	tween_back.tween_property(visible_score_label, "scale", Vector2(1.0, 1.0), 0.18).set_delay(0.12)
+	tween_back.tween_property(visible_score_label, "modulate", Color(1, 1, 1), 0.18).set_delay(0.12)
+
+
+# 显示加分反馈：方案 1（消除位置飘字）+ 方案 2（分数标签旁弹出 + 标签脉冲）
+func _show_score_feedback(points: int, match_midpoint: Vector2) -> void:
+	# 方案 1：在消除位置飘出带等级色的分数
+	if SCHEME_1_FLOATING_TEXT_ENABLED:
+		_spawn_floating_score(points, match_midpoint)
+
+	# 方案 2：在可见的分数标签旁弹出“+N”，同时分数标签脉冲变色
+	var color_hex := ScoreManager.SCORE_COLOR_NORMAL
+	match points:
+		30: color_hex = ScoreManager.SCORE_COLOR_GOLD
+		20: color_hex = ScoreManager.SCORE_COLOR_SILVER
+		15: color_hex = ScoreManager.SCORE_COLOR_BRONZE
+	var target_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
+	score_gain_label.text = "[color=%s][b]+%d[/b][/color]" % [color_hex, points]
+	score_gain_label.global_position = target_score_label.global_position + Vector2(target_score_label.size.x + 8.0, 4.0)
+	score_gain_label.show()
+	score_gain_label.modulate = Color.WHITE
+	var start_y := score_gain_label.position.y
+	var tween := create_tween()
+	tween.tween_property(score_gain_label, "position:y", start_y - 24.0, 0.5)
+	tween.parallel().tween_property(score_gain_label, "modulate:a", 0.0, 0.5)
+	tween.finished.connect(func() -> void:
+		score_gain_label.hide()
+		score_gain_label.modulate = Color.WHITE
+	)
+
+
+# 方案 1：在指定位置生成向上飘动并逐渐消失的分数飘字（连击快时自动延长停留）
+func _spawn_floating_score(points: int, pos: Vector2) -> void:
+	var idx := _score_popup_index
+	var popup: Label = score_popups[idx]
+	_score_popup_index = (_score_popup_index + 1) % score_popups.size()
+
+	# 若该飘字实例仍在动画中，先终止旧动画
+	if _score_popup_tweens[idx] != null:
+		_score_popup_tweens[idx].kill()
+		_score_popup_tweens[idx] = null
+
+	popup.text = "+%d" % points
+	popup.modulate = ScoreManager.get_score_tier_color(points)
+	popup.global_position = pos - popup.size / 2.0
+	popup.show()
+
+	# 连击越高，飘字停留越久（整体都比原来减短 0.3 秒）：
+	# 0-1 连击：停留 0.0 秒 + 淡出 0.7 秒
+	# 2-3 连击：停留 0.3 秒 + 淡出 0.9 秒
+	# 4+ 连击：停留 0.7 秒 + 淡出 1.0 秒
+	var combo := score_manager.get_combo_count()
+	var linger_time := 0.0
+	var fade_time := 0.7
+	if combo >= 4:
+		linger_time = 0.7
+		fade_time = 1.0
+	elif combo >= 2:
+		linger_time = 0.3
+		fade_time = 0.9
+
+	var tween := create_tween()
+	tween.tween_property(popup, "position:y", popup.position.y - 50.0, linger_time + fade_time)
+	tween.parallel().tween_property(popup, "modulate:a", 1.0, linger_time)
+	tween.chain().tween_property(popup, "modulate:a", 0.0, fade_time)
+	tween.finished.connect(func() -> void:
+		popup.hide()
+		popup.modulate = Color.WHITE
+		_score_popup_tweens[idx] = null
+	)
+	_score_popup_tweens[idx] = tween
+
+
+# 方案 3：刷新连击标签显示
+func _update_combo_display() -> void:
+	var text := ""
+	var combo := score_manager.get_combo_count()
+	if combo > 1:
+		text = "[color=%s][b]连击 x%d[/b][/color]" % [ScoreManager.SCORE_COLOR_GOLD, combo]
+	combo_label.text = text
+	compact_combo_label.text = text
+
+
+# 模块：消除逻辑 —— 处理格子点击、选中、判断并执行消除
+func _on_cell_clicked(index: int) -> void:
+	if game_state != GameState.PLAYING:
+		return
+	if _is_paused or _is_animating:
+		return
+
+	var pos := board_manager.index_to_pos(index)
+	var r := pos.x
+	var c := pos.y
+	if board_manager.board[r][c] == 0:
+		return
+
+	# 第一次点击：选中
+	if selected_index == -1:
+		selected_index = index
+		board_manager.update_all_cells(selected_index)
+		audio_manager.play_sound(AudioManager.CLICK_SOUND)
+		return
+
+	# 点击同一个格子：取消选中
+	if selected_index == index:
+		selected_index = -1
+		board_manager.update_all_cells(selected_index)
+		return
+
+	var pos1 := board_manager.index_to_pos(selected_index)
+	var r1 := pos1.x
+	var c1 := pos1.y
+
+	# 图案不同：改选新格子（错误音效）
+	if board_manager.board[r][c] != board_manager.board[r1][c1]:
+		selected_index = index
+		board_manager.update_all_cells(selected_index)
+		audio_manager.play_sound(AudioManager.ERROR_SOUND)
+		return
+
+	# 无法连通：改选新格子（错误音效）
+	if not board_manager.can_connect(r1, c1, r, c):
+		selected_index = index
+		board_manager.update_all_cells(selected_index)
+		audio_manager.play_sound(AudioManager.ERROR_SOUND)
+		return
+
+	# 可以消除：先绘制连接路径，再播放消除动画，然后更新棋盘数据
+	var path: Array[Vector2i] = board_manager.find_connection_path(r1, c1, r, c)
+	var points: PackedVector2Array = PackedVector2Array()
+	for ext_pos in path:
+		points.append(board_manager.extended_to_screen(ext_pos))
+	match_line.points = points
+
+	var cell1: Cell = grid_container.get_child(selected_index)
+	var cell2: Cell = grid_container.get_child(index)
+	_is_animating = true
+	selected_index = -1
+	board_manager.update_all_cells(selected_index)
+
+	var tween1 := cell1.play_eliminate_animation()
+	var tween2 := cell2.play_eliminate_animation()
+	if tween1 != null:
+		await tween1.finished
+	if tween2 != null:
+		await tween2.finished
+
+	match_line.points = PackedVector2Array()
+
+	# 动画结束后才真正消除并计分
+	var time_since_last: float = _eliminate(r1, c1, r, c)
+
+	# 方案 1/2：显示加分反馈（方案 1 可通过 SCHEME_1_FLOATING_TEXT_ENABLED 单独关闭）
+	# 飘字显示在第二次点击的格子中心
+	var popup_pos: Vector2 = cell2.global_position + cell2.size / 2.0
+	_show_score_feedback(score_manager.get_last_points(), popup_pos)
+
+	board_manager.apply_collapse(current_level, _level2_direction, _level4_direction)
+	board_manager.update_all_cells(selected_index)
+	_update_ui()
+	_is_animating = false
+
+	if time_since_last > 10.0:
+		audio_manager.play_sound(AudioManager.SUCCESS_SLOW_SOUND)
+	else:
+		audio_manager.play_sound(AudioManager.SUCCESS_SOUND)
+
+	if board_manager.pairs_left == 0:
+		_on_level_complete()
+	elif not board_manager.has_any_match():
+		board_manager.shuffle_remaining()
+		board_manager.update_all_cells(selected_index)
+
+
+# 消除两个格子，并奖励额外时间；返回距离上次消除的秒数
+func _eliminate(r1: int, c1: int, r2: int, c2: int) -> float:
+	# 记录消除前的完整棋盘与分数/时间状态，用于撤销/重做
+	var move := {
+		"board_state": board_manager.get_state(),
+		"score_state": score_manager.get_state(),
+		"level_before": current_level,
+	}
+	move_history.append(move)
+	undo_history.clear()
+
+	board_manager.eliminate(r1, c1, r2, c2)
+	var result := score_manager.record_elimination()
+
+	_update_pairs_label()
+	_update_score_label()
+	_update_timer_bar()
+
+	return result["time_since_last"]
+
+
+# 模块：撤销 / 重做 —— 撤销上一步消除
+func _on_undo_button_pressed() -> void:
+	if move_history.is_empty() or _is_paused or _is_animating:
+		return
+
+	var last: Dictionary = move_history.pop_back()
+
+	# 保存当前状态用于重做
+	var redo_move := {
+		"board_state": board_manager.get_state(),
+		"score_state": score_manager.get_state(),
+		"level_before": current_level,
+	}
+	undo_history.append(redo_move)
+
+	# 恢复到消除前的棋盘状态
+	board_manager.restore_state(last["board_state"])
+	score_manager.restore_state(last["score_state"])
+	score_manager.reset_combo()
+	current_level = last["level_before"]
+	selected_index = -1
+	game_state = GameState.PLAYING
+	game_over_panel.hide()
+	_pending_next_level = -1
+	custom_dialog.hide()
+	board_manager.update_all_cells(selected_index)
+	_update_ui()
+	_update_level_info()
+	_update_time_labels()
+	_update_score_label()
+
+
+# 模块：撤销 / 重做 —— 重做一步被撤销的消除
+func _on_redo_button_pressed() -> void:
+	if undo_history.is_empty() or _is_paused or _is_animating:
+		return
+
+	var redo: Dictionary = undo_history.pop_back()
+
+	# 保存当前状态用于撤销
+	var move := {
+		"board_state": board_manager.get_state(),
+		"score_state": score_manager.get_state(),
+		"level_before": current_level,
+	}
+	move_history.append(move)
+
+	# 恢复重做时的棋盘状态
+	board_manager.restore_state(redo["board_state"])
+	score_manager.restore_state(redo["score_state"])
+	score_manager.reset_combo()
+	current_level = redo["level_before"]
+	selected_index = -1
+	board_manager.update_all_cells(selected_index)
+	_update_ui()
+	_update_level_info()
+	_update_time_labels()
+	_update_score_label()
+
+	if board_manager.pairs_left == 0:
+		_on_level_complete()
+	elif not board_manager.has_any_match():
+		board_manager.shuffle_remaining()
+		board_manager.update_all_cells(selected_index)
+
+
+# 模块：提示与洗牌 —— 高亮一对可连通的图案并画线
+func _on_hint_button_pressed() -> void:
+	if game_state != GameState.PLAYING or _hint_active or _is_paused or _is_animating:
+		return
+
+	if current_mode == GameMode.COMPETITIVE and hints_remaining <= 0:
+		return
+
+	var path: Array[Vector2i] = board_manager.find_hint_pair()
+	if path.is_empty():
+		return
+
+	if current_mode == GameMode.COMPETITIVE:
+		hints_remaining -= 1
+		_update_button_texts()
+		_update_ui()
+
+	_hint_active = true
+
+	# 让两个目标格子的图片闪烁两下
+	var start_ext: Vector2i = path[0]
+	var end_ext: Vector2i = path[path.size() - 1]
+	var start_board := Vector2i(start_ext.x - 1, start_ext.y - 1)
+	var end_board := Vector2i(end_ext.x - 1, end_ext.y - 1)
+	var start_cell: Cell = grid_container.get_child(board_manager.pos_to_index(start_board.x, start_board.y))
+	var end_cell: Cell = grid_container.get_child(board_manager.pos_to_index(end_board.x, end_board.y))
+
+	start_cell.flash()
+	end_cell.flash()
+
+	var line_points: PackedVector2Array = PackedVector2Array()
+	for ext_pos in path:
+		line_points.append(board_manager.extended_to_screen(ext_pos))
+
+	hint_line.points = line_points
+	await get_tree().create_timer(1.5).timeout
+	hint_line.points = PackedVector2Array()
+	_hint_active = false
+
+
+# 模块：提示与洗牌 —— 手动重排剩余图案
+func _on_shuffle_button_pressed() -> void:
+	if game_state != GameState.PLAYING or _is_paused or _is_animating:
+		return
+
+	if current_mode == GameMode.COMPETITIVE and shuffles_remaining <= 0:
+		return
+
+	if current_mode == GameMode.COMPETITIVE:
+		shuffles_remaining -= 1
+		_update_button_texts()
+
+	board_manager.shuffle_remaining()
+	selected_index = -1
+	board_manager.update_all_cells(selected_index)
+	_update_ui()
+
+
+# 重新开始本局（保留总分与总用时）
+func _on_restart_button_pressed() -> void:
+	if _is_animating:
+		return
+	restart_game(false)
 
 
 # 刷新按钮可用状态
@@ -1574,1030 +1681,3 @@ func _update_button_texts() -> void:
 	else:
 		hint_button.text = "💡 提示(%d)" % hints_remaining
 		shuffle_button.text = "🔀 洗牌(%d)" % shuffles_remaining
-
-
-# 将秒数格式化为 MM:SS 或 HH:MM:SS
-func _format_time(seconds: float) -> String:
-	var total_secs := int(seconds)
-	var hours := int(total_secs / 3600.0)
-	var minutes := int((total_secs % 3600) / 60.0)
-	var secs := total_secs % 60
-	if hours > 0:
-		return "%02d:%02d:%02d" % [hours, minutes, secs]
-	return "%02d:%02d" % [minutes, secs]
-
-
-# 刷新时间显示
-func _update_time_labels() -> void:
-	time_label.text = "[color=#8C5C33]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % [_format_time(total_game_time), _format_time(level_time)]
-	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % _format_time(level_time)
-
-
-# 刷新分数显示
-func _update_score_label() -> void:
-	score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
-	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score
-
-
-# 分数标签大小变化时同步缩放中心
-func _on_score_label_resized() -> void:
-	score_label.pivot_offset = score_label.size / 2.0
-
-
-func _emphasize_score_label(points: int = 0) -> void:
-	var tier_color := _get_score_tier_color(points)
-
-	# 根据当前显示模式，脉冲对应的分数标签
-	var visible_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
-	visible_score_label.pivot_offset = visible_score_label.size / 2.0
-
-	var tween := create_tween().set_parallel(true)
-	tween.tween_property(visible_score_label, "scale", Vector2(1.4, 1.4), 0.12)
-	tween.tween_property(visible_score_label, "modulate", tier_color, 0.12)
-
-	var tween_back := create_tween()
-	tween_back.tween_property(visible_score_label, "scale", Vector2(1.0, 1.0), 0.18).set_delay(0.12)
-	tween_back.tween_property(visible_score_label, "modulate", Color(1, 1, 1), 0.18).set_delay(0.12)
-
-
-# 根据分数返回对应等级颜色
-func _get_score_tier_color(points: int) -> Color:
-	match points:
-		30:
-			return Color(SCORE_COLOR_GOLD)
-		20:
-			return Color(SCORE_COLOR_SILVER)
-		15:
-			return Color(SCORE_COLOR_BRONZE)
-		_:
-			return Color(SCORE_COLOR_NORMAL)
-
-
-# 显示加分反馈：方案 1（消除位置飘字）+ 方案 2（分数标签旁弹出 + 标签脉冲）
-func _show_score_feedback(points: int, match_midpoint: Vector2) -> void:
-	# 方案 1：在消除位置飘出带等级色的分数
-	if SCHEME_1_FLOATING_TEXT_ENABLED:
-		_spawn_floating_score(points, match_midpoint)
-
-	# 方案 2：在可见的分数标签旁弹出“+N”，同时分数标签脉冲变色
-	var color_hex := SCORE_COLOR_NORMAL
-	match points:
-		30: color_hex = SCORE_COLOR_GOLD
-		20: color_hex = SCORE_COLOR_SILVER
-		15: color_hex = SCORE_COLOR_BRONZE
-	var target_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
-	score_gain_label.text = "[color=%s][b]+%d[/b][/color]" % [color_hex, points]
-	score_gain_label.global_position = target_score_label.global_position + Vector2(target_score_label.size.x + 8.0, 4.0)
-	score_gain_label.show()
-	score_gain_label.modulate = Color.WHITE
-	var start_y := score_gain_label.position.y
-	var tween := create_tween()
-	tween.tween_property(score_gain_label, "position:y", start_y - 24.0, 0.5)
-	tween.parallel().tween_property(score_gain_label, "modulate:a", 0.0, 0.5)
-	tween.finished.connect(func() -> void:
-		score_gain_label.hide()
-		score_gain_label.modulate = Color.WHITE
-	)
-
-
-# 方案 1：在指定位置生成向上飘动并逐渐消失的分数飘字（连击快时自动延长停留）
-func _spawn_floating_score(points: int, pos: Vector2) -> void:
-	var idx := _score_popup_index
-	var popup: Label = score_popups[idx]
-	_score_popup_index = (_score_popup_index + 1) % score_popups.size()
-
-	# 若该飘字实例仍在动画中，先终止旧动画
-	if _score_popup_tweens[idx] != null:
-		_score_popup_tweens[idx].kill()
-		_score_popup_tweens[idx] = null
-
-	popup.text = "+%d" % points
-	popup.modulate = _get_score_tier_color(points)
-	popup.global_position = pos - popup.size / 2.0
-	popup.show()
-
-	# 连击越高，飘字停留越久（整体都比原来减短 0.3 秒）：
-	# 0-1 连击：停留 0.0 秒 + 淡出 0.7 秒
-	# 2-3 连击：停留 0.3 秒 + 淡出 0.9 秒
-	# 4+ 连击：停留 0.7 秒 + 淡出 1.0 秒
-	var linger_time := 0.0
-	var fade_time := 0.7
-	if _combo_count >= 4:
-		linger_time = 0.7
-		fade_time = 1.0
-	elif _combo_count >= 2:
-		linger_time = 0.3
-		fade_time = 0.9
-
-	var tween := create_tween()
-	tween.tween_property(popup, "position:y", popup.position.y - 50.0, linger_time + fade_time)
-	tween.parallel().tween_property(popup, "modulate:a", 1.0, linger_time)
-	tween.chain().tween_property(popup, "modulate:a", 0.0, fade_time)
-	tween.finished.connect(func() -> void:
-		popup.hide()
-		popup.modulate = Color.WHITE
-		_score_popup_tweens[idx] = null
-	)
-	_score_popup_tweens[idx] = tween
-
-
-# 方案 3：刷新连击标签显示
-func _update_combo_display() -> void:
-	var text := ""
-	if _combo_count > 1:
-		text = "[color=%s][b]连击 x%d[/b][/color]" % [SCORE_COLOR_GOLD, _combo_count]
-	combo_label.text = text
-	compact_combo_label.text = text
-
-
-# 索引与行列坐标互转
-func _index_to_pos(index: int) -> Vector2i:
-	return Vector2i(int(float(index) / _get_cols()), index % _get_cols())
-
-
-func _pos_to_index(r: int, c: int) -> int:
-	return r * _get_cols() + c
-
-
-# 模块：消除逻辑 —— 处理格子点击、选中、判断并执行消除
-func _on_cell_clicked(index: int) -> void:
-	if game_state != GameState.PLAYING:
-		return
-	if _is_paused or _is_animating:
-		return
-
-	var pos := _index_to_pos(index)
-	var r := pos.x
-	var c := pos.y
-	if board[r][c] == 0:
-		return
-
-	# 第一次点击：选中
-	if selected_index == -1:
-		selected_index = index
-		_update_all_cells()
-		_play_sound(CLICK_SOUND)
-		return
-
-	# 点击同一个格子：取消选中
-	if selected_index == index:
-		selected_index = -1
-		_update_all_cells()
-		return
-
-	var pos1 := _index_to_pos(selected_index)
-	var r1 := pos1.x
-	var c1 := pos1.y
-
-	# 图案不同：改选新格子（错误音效）
-	if board[r][c] != board[r1][c1]:
-		selected_index = index
-		_update_all_cells()
-		_play_sound(ERROR_SOUND)
-		return
-
-	# 无法连通：改选新格子（错误音效）
-	if not _can_connect(r1, c1, r, c):
-		selected_index = index
-		_update_all_cells()
-		_play_sound(ERROR_SOUND)
-		return
-
-	# 可以消除：先绘制连接路径，再播放消除动画，然后更新棋盘数据
-	var path: Array[Vector2i] = _find_connection_path(r1, c1, r, c)
-	var points: PackedVector2Array = PackedVector2Array()
-	for ext_pos in path:
-		points.append(_extended_to_screen(ext_pos))
-	match_line.points = points
-
-	var cell1: Cell = grid_container.get_child(selected_index)
-	var cell2: Cell = grid_container.get_child(index)
-	_is_animating = true
-	selected_index = -1
-	_update_all_cells()
-
-	var tween1 := cell1.play_eliminate_animation()
-	var tween2 := cell2.play_eliminate_animation()
-	if tween1 != null:
-		await tween1.finished
-	if tween2 != null:
-		await tween2.finished
-
-	match_line.points = PackedVector2Array()
-
-	# 动画结束后才真正消除并计分
-	var time_since_last: float = _eliminate(r1, c1, r, c)
-
-	# 方案 1/2：显示加分反馈（方案 1 可通过 SCHEME_1_FLOATING_TEXT_ENABLED 单独关闭）
-	# 飘字显示在第二次点击的格子中心
-	var popup_pos: Vector2 = cell2.global_position + cell2.size / 2.0
-	_show_score_feedback(_last_points, popup_pos)
-
-	if current_level == 2:
-		match _level2_direction:
-			Level2Dir.LEFT:
-				_collapse_left()
-			Level2Dir.RIGHT:
-				_collapse_right()
-	elif current_level == 3:
-		_collapse_outward()
-	elif current_level == 4:
-		match _level4_direction:
-			Level4Dir.UP:
-				_collapse_up()
-			Level4Dir.DOWN:
-				_collapse_down()
-	elif current_level == 5:
-		_collapse_inward()
-	elif current_level == 6:
-		_collapse_horizontal_expand()
-	elif current_level == 7:
-		_collapse_vertical_expand()
-	elif current_level == 8:
-		_collapse_horizontal_converge()
-	elif current_level == 9:
-		_collapse_vertical_converge()
-	elif current_level == 10:
-		_collapse_quadrant_spread()
-	_update_all_cells()
-	_update_ui()
-	_is_animating = false
-
-	if time_since_last > 10.0:
-		_play_sound(SUCCESS_SLOW_SOUND)
-	else:
-		_play_sound(SUCCESS_SOUND)
-
-	if pairs_left == 0:
-		_on_level_complete()
-	elif not _has_any_match():
-		_shuffle_remaining()
-		_update_all_cells()
-
-
-# 消除两个格子，并奖励额外时间；返回距离上次消除的秒数
-func _eliminate(r1: int, c1: int, r2: int, c2: int) -> float:
-	# 记录消除前的完整棋盘与分数/时间状态，用于撤销/重做
-	var move := {
-		"board_before": board.duplicate(true),
-		"pairs_left_before": pairs_left,
-		"level_before": current_level,
-		"total_time_before": total_game_time,
-		"level_time_before": level_time,
-		"score_before": score,
-		"last_eliminate_time_before": _last_eliminate_time
-	}
-	move_history.append(move)
-	undo_history.clear()
-
-	# 计算连续消除得分
-	var time_since_last: float
-	if _last_eliminate_time < 0:
-		time_since_last = -1.0
-	else:
-		time_since_last = total_game_time - _last_eliminate_time
-
-	var points: int
-	if time_since_last < 0:
-		points = 10
-	elif time_since_last <= 3.0:
-		points = 30
-	elif time_since_last <= 5.0:
-		points = 20
-	elif time_since_last <= 10.0:
-		points = 15
-	elif time_since_last <= 20.0:
-		points = 12
-	else:
-		points = 10
-
-	score += points
-	_last_points = points
-	_last_eliminate_time = total_game_time
-
-	# 更新连击计数：10 秒内消除连击 +1，否则从 1 开始新的连击
-	if time_since_last >= 0 and time_since_last <= COMBO_FAST_THRESHOLD:
-		_combo_count += 1
-	else:
-		_combo_count = 1
-	_update_combo_display()
-
-	_update_score_label()
-	_emphasize_score_label(points)
-
-	board[r1][c1] = 0
-	board[r2][c2] = 0
-	pairs_left -= 1
-	_update_pairs_label()
-
-	remaining_time = min(MAX_TIME, remaining_time + TIME_BONUS)
-	_update_timer_bar()
-
-	return time_since_last
-
-
-# 判断两个格子能否连通
-func _can_connect(r1: int, c1: int, r2: int, c2: int) -> bool:
-	return not _find_connection_path(r1, c1, r2, c2).is_empty()
-
-
-# 模块：路径查找 —— BFS 搜索可连通路径，扩展棋盘外圈为虚拟空白，限制转弯次数 ≤ 2
-func _find_connection_path(r1: int, c1: int, r2: int, c2: int) -> Array[Vector2i]:
-	if board[r1][c1] == 0 or board[r2][c2] == 0:
-		return []
-	if board[r1][c1] != board[r2][c2]:
-		return []
-	if r1 == r2 and c1 == c2:
-		return []
-
-	var start := Vector2i(r1 + 1, c1 + 1)
-	var end := Vector2i(r2 + 1, c2 + 1)
-	const INF := 999
-
-	var visited: Array = []
-	var came_from: Array = []
-	for i in range(_get_rows() + 2):
-		visited.append([])
-		came_from.append([])
-		for j in range(_get_cols() + 2):
-			visited[i].append([INF, INF, INF, INF])
-			came_from[i].append([null, null, null, null])
-
-	var queue: Array = []
-	for d in range(4):
-		var next: Vector2i = start + DIRECTIONS[d]
-		var prev_pos: Vector2i = start
-		var first_step := true
-		while _is_passable(next, end):
-			if visited[next.x][next.y][d] > 0:
-				visited[next.x][next.y][d] = 0
-				var prev_dir: int = -1 if first_step else d
-				came_from[next.x][next.y][d] = [prev_pos, prev_dir]
-				queue.append([next, d, 0])
-			prev_pos = next
-			next += DIRECTIONS[d]
-			first_step = false
-
-	while queue.size() > 0:
-		var item: Array = queue.pop_front()
-		var pos: Vector2i = item[0]
-		var dir: int = item[1]
-		var turns: int = item[2]
-
-		if pos == end:
-			return _reconstruct_path(came_from, end, dir, start)
-
-		for new_dir in range(4):
-			if new_dir == dir:
-				continue
-			var new_turns := turns + 1
-			if new_turns > 2:
-				continue
-			var next: Vector2i = pos + DIRECTIONS[new_dir]
-			var prev_pos: Vector2i = pos
-			var first_step := true
-			while _is_passable(next, end):
-				if visited[next.x][next.y][new_dir] > new_turns:
-					visited[next.x][next.y][new_dir] = new_turns
-					var prev_dir: int = dir if first_step else new_dir
-					came_from[next.x][next.y][new_dir] = [prev_pos, prev_dir]
-					queue.append([next, new_dir, new_turns])
-				prev_pos = next
-				next += DIRECTIONS[new_dir]
-				first_step = false
-
-	return []
-
-
-# 根据 BFS 记录回溯出完整路径
-func _reconstruct_path(came_from: Array, end_pos: Vector2i, end_dir: int, start_pos: Vector2i) -> Array[Vector2i]:
-	var path: Array[Vector2i] = [end_pos]
-	var cur_pos: Vector2i = end_pos
-	var cur_dir: int = end_dir
-
-	while cur_pos != start_pos:
-		var cf = came_from[cur_pos.x][cur_pos.y][cur_dir]
-		if cf == null or cf[0] == null:
-			break
-		var prev_pos: Vector2i = cf[0]
-		var prev_dir: int = cf[1]
-		var step: Vector2i = (cur_pos - prev_pos).sign()
-		if step == Vector2i.ZERO:
-			break
-		var p: Vector2i = cur_pos - step
-		while p != prev_pos:
-			path.append(p)
-			p -= step
-		path.append(prev_pos)
-		cur_pos = prev_pos
-		cur_dir = prev_dir
-
-	path.reverse()
-	return path
-
-
-# 将扩展棋盘坐标转换为全局屏幕坐标（CanvasLayer 中的 HintLine 使用全局坐标）
-func _extended_to_screen(ext_pos: Vector2i) -> Vector2:
-	var cell: Cell = grid_container.get_child(0)
-	var cell_size: Vector2 = cell.size
-	var h_sep: int = grid_container.get_theme_constant("h_separation")
-	var v_sep: int = grid_container.get_theme_constant("v_separation")
-	var base: Vector2 = cell.position + cell_size / 2.0
-	var local_in_aspect := grid_container.position + Vector2(
-		base.x + (ext_pos.y - 1) * (cell_size.x + h_sep),
-		base.y + (ext_pos.x - 1) * (cell_size.y + v_sep)
-	)
-	return aspect_ratio_container.global_position + local_in_aspect
-
-
-# 判断扩展坐标是否可通行（棋盘外圈视为空白）
-func _is_passable(ext_pos: Vector2i, end: Vector2i) -> bool:
-	if ext_pos == end:
-		return true
-	if ext_pos.x < 0 or ext_pos.x > _get_rows() + 1 or ext_pos.y < 0 or ext_pos.y > _get_cols() + 1:
-		return false
-	if ext_pos.x == 0 or ext_pos.x == _get_rows() + 1 or ext_pos.y == 0 or ext_pos.y == _get_cols() + 1:
-		return true
-	return board[ext_pos.x - 1][ext_pos.y - 1] == 0
-
-
-# 检查剩余牌中是否存在至少一对可连通的牌
-func _has_any_match() -> bool:
-	var positions: Dictionary[int, Array] = {}
-	for r in range(_get_rows()):
-		for c in range(_get_cols()):
-			var type :int = board[r][c]
-			if type == 0:
-				continue
-			if not positions.has(type):
-				positions[type] = []
-			positions[type].append(Vector2i(r, c))
-
-	for type: int in positions.keys():
-		var arr: Array = positions[type]
-		for i in range(arr.size()):
-			for j in range(i + 1, arr.size()):
-				var p1: Vector2i = arr[i]
-				var p2: Vector2i = arr[j]
-				if _can_connect(p1.x, p1.y, p2.x, p2.y):
-					return true
-	return false
-
-
-# 统计当前棋盘里可以消除的对数，达到 max_count 后提前返回
-func _count_matchable_pairs(max_count: int = 999) -> int:
-	var positions: Dictionary[int, Array] = {}
-	for r in range(_get_rows()):
-		for c in range(_get_cols()):
-			var type: int = board[r][c]
-			if type == 0:
-				continue
-			if not positions.has(type):
-				positions[type] = []
-			positions[type].append(Vector2i(r, c))
-
-	var count := 0
-	for type: int in positions.keys():
-		var arr: Array = positions[type]
-		for i in range(arr.size()):
-			for j in range(i + 1, arr.size()):
-				var p1: Vector2i = arr[i]
-				var p2: Vector2i = arr[j]
-				if _can_connect(p1.x, p1.y, p2.x, p2.y):
-					count += 1
-					if count >= max_count:
-						return count
-	return count
-
-
-# 查找一对可消除的图案，返回完整连接路径（扩展坐标）；找不到返回空数组
-func _find_hint_pair() -> Array[Vector2i]:
-	var positions: Dictionary[int, Array] = {}
-	for r in range(_get_rows()):
-		for c in range(_get_cols()):
-			var type: int = board[r][c]
-			if type == 0:
-				continue
-			if not positions.has(type):
-				positions[type] = []
-			positions[type].append(Vector2i(r, c))
-
-	for type: int in positions.keys():
-		var arr: Array = positions[type]
-		for i in range(arr.size()):
-			for j in range(i + 1, arr.size()):
-				var p1: Vector2i = arr[i]
-				var p2: Vector2i = arr[j]
-				var path := _find_connection_path(p1.x, p1.y, p2.x, p2.y)
-				if not path.is_empty():
-					return path
-	return []
-
-
-# 模块：坍塌 —— 消除后整行向左靠拢
-func _collapse_left() -> void:
-	for r in range(_get_rows()):
-		var new_row: Array[int] = []
-		for c in range(_get_cols()):
-			if board[r][c] != 0:
-				new_row.append(board[r][c])
-		while new_row.size() < _get_cols():
-			new_row.append(0)
-		board[r] = new_row
-
-
-# 模块：坍塌 —— 消除后整行向右靠拢
-func _collapse_right() -> void:
-	for r in range(_get_rows()):
-		var new_row: Array[int] = []
-		for c in range(_get_cols()):
-			if board[r][c] != 0:
-				new_row.append(board[r][c])
-		while new_row.size() < _get_cols():
-			new_row.push_front(0)
-		board[r] = new_row
-
-
-# 模块：坍塌 —— 消除后整列向上靠拢
-func _collapse_up() -> void:
-	for c in range(_get_cols()):
-		var new_col: Array[int] = []
-		for r in range(_get_rows()):
-			if board[r][c] != 0:
-				new_col.append(board[r][c])
-		while new_col.size() < _get_rows():
-			new_col.append(0)
-		for r in range(_get_rows()):
-			board[r][c] = new_col[r]
-
-
-# 模块：坍塌 —— 消除后整列向下靠拢
-func _collapse_down() -> void:
-	for c in range(_get_cols()):
-		var new_col: Array[int] = []
-		for r in range(_get_rows()):
-			if board[r][c] != 0:
-				new_col.append(board[r][c])
-		while new_col.size() < _get_rows():
-			new_col.push_front(0)
-		for r in range(_get_rows()):
-			board[r][c] = new_col[r]
-
-
-# 模块：坍塌 —— 消除后向四周（从中心向外）扩散
-func _collapse_outward() -> void:
-	var center_r: int = int(_get_rows() / 2.0)
-	var center_c: int = int(_get_cols() / 2.0)
-
-	# 水平方向：中心左侧向左靠拢，中心右侧向右靠拢
-	for r in range(_get_rows()):
-		var left_part: Array[int] = []
-		var right_part: Array[int] = []
-		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
-		for c in range(center_c, _get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
-
-		var new_left: Array[int] = left_part.duplicate()
-		while new_left.size() < center_c:
-			new_left.append(0)
-
-		var new_right: Array[int] = []
-		for i in range(center_c - right_part.size()):
-			new_right.append(0)
-		new_right.append_array(right_part)
-
-		for c in range(center_c):
-			board[r][c] = new_left[c]
-		for c in range(center_c, _get_cols()):
-			board[r][c] = new_right[c - center_c]
-
-	# 垂直方向：中心上侧向上靠拢，中心下侧向下靠拢
-	for c in range(_get_cols()):
-		var top_part: Array[int] = []
-		var bottom_part: Array[int] = []
-		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
-		for r in range(center_r, _get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
-
-		var new_top: Array[int] = top_part.duplicate()
-		while new_top.size() < center_r:
-			new_top.append(0)
-
-		var new_bottom: Array[int] = []
-		for i in range((_get_rows() - center_r) - bottom_part.size()):
-			new_bottom.append(0)
-		new_bottom.append_array(bottom_part)
-
-		for r in range(center_r):
-			board[r][c] = new_top[r]
-		for r in range(center_r, _get_rows()):
-			board[r][c] = new_bottom[r - center_r]
-
-
-# 模块：坍塌 —— 消除后从四周向中心聚拢
-func _collapse_inward() -> void:
-	var center_r: int = int(_get_rows() / 2.0)
-	var center_c: int = int(_get_cols() / 2.0)
-
-	# 水平方向：中心左侧向右靠拢，中心右侧向左靠拢
-	for r in range(_get_rows()):
-		var left_part: Array[int] = []
-		var right_part: Array[int] = []
-		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
-		for c in range(center_c, _get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
-
-		var new_left: Array[int] = []
-		for i in range(center_c - left_part.size()):
-			new_left.append(0)
-		new_left.append_array(left_part)
-
-		var new_right: Array[int] = right_part.duplicate()
-		while new_right.size() < (_get_cols() - center_c):
-			new_right.append(0)
-
-		for c in range(center_c):
-			board[r][c] = new_left[c]
-		for c in range(center_c, _get_cols()):
-			board[r][c] = new_right[c - center_c]
-
-	# 垂直方向：中心上侧向下靠拢，中心下侧向上靠拢
-	for c in range(_get_cols()):
-		var top_part: Array[int] = []
-		var bottom_part: Array[int] = []
-		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
-		for r in range(center_r, _get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
-
-		var new_top: Array[int] = []
-		for i in range(center_r - top_part.size()):
-			new_top.append(0)
-		new_top.append_array(top_part)
-
-		var new_bottom: Array[int] = bottom_part.duplicate()
-		while new_bottom.size() < (_get_rows() - center_r):
-			new_bottom.append(0)
-
-		for r in range(center_r):
-			board[r][c] = new_top[r]
-		for r in range(center_r, _get_rows()):
-			board[r][c] = new_bottom[r - center_r]
-
-
-# 模块：坍塌 —— 消除后以垂直中线为基准向左右两边扩散
-func _collapse_horizontal_expand() -> void:
-	var center_c: int = int(_get_cols() / 2.0)
-	for r in range(_get_rows()):
-		var left_part: Array[int] = []
-		var right_part: Array[int] = []
-		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
-		for c in range(center_c, _get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
-
-		var new_left: Array[int] = left_part.duplicate()
-		while new_left.size() < center_c:
-			new_left.append(0)
-
-		var new_right: Array[int] = []
-		for i in range((_get_cols() - center_c) - right_part.size()):
-			new_right.append(0)
-		new_right.append_array(right_part)
-
-		for c in range(center_c):
-			board[r][c] = new_left[c]
-		for c in range(center_c, _get_cols()):
-			board[r][c] = new_right[c - center_c]
-
-
-# 模块：坍塌 —— 消除后以水平中线为基准向上下两边扩散
-func _collapse_vertical_expand() -> void:
-	var center_r: int = int(_get_rows() / 2.0)
-	for c in range(_get_cols()):
-		var top_part: Array[int] = []
-		var bottom_part: Array[int] = []
-		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
-		for r in range(center_r, _get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
-
-		var new_top: Array[int] = top_part.duplicate()
-		while new_top.size() < center_r:
-			new_top.append(0)
-
-		var new_bottom: Array[int] = []
-		for i in range((_get_rows() - center_r) - bottom_part.size()):
-			new_bottom.append(0)
-		new_bottom.append_array(bottom_part)
-
-		for r in range(center_r):
-			board[r][c] = new_top[r]
-		for r in range(center_r, _get_rows()):
-			board[r][c] = new_bottom[r - center_r]
-
-
-# 模块：坍塌 —— 消除后以垂直中线为基准向中心汇聚
-func _collapse_horizontal_converge() -> void:
-	var center_c: int = int(_get_cols() / 2.0)
-	for r in range(_get_rows()):
-		var left_part: Array[int] = []
-		var right_part: Array[int] = []
-		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
-		for c in range(center_c, _get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
-
-		var new_left: Array[int] = []
-		for i in range(center_c - left_part.size()):
-			new_left.append(0)
-		new_left.append_array(left_part)
-
-		var new_right: Array[int] = right_part.duplicate()
-		while new_right.size() < (_get_cols() - center_c):
-			new_right.append(0)
-
-		for c in range(center_c):
-			board[r][c] = new_left[c]
-		for c in range(center_c, _get_cols()):
-			board[r][c] = new_right[c - center_c]
-
-
-# 模块：坍塌 —— 消除后以水平中线为基准向中心汇聚
-func _collapse_vertical_converge() -> void:
-	var center_r: int = int(_get_rows() / 2.0)
-	for c in range(_get_cols()):
-		var top_part: Array[int] = []
-		var bottom_part: Array[int] = []
-		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
-		for r in range(center_r, _get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
-
-		var new_top: Array[int] = []
-		for i in range(center_r - top_part.size()):
-			new_top.append(0)
-		new_top.append_array(top_part)
-
-		var new_bottom: Array[int] = bottom_part.duplicate()
-		while new_bottom.size() < (_get_rows() - center_r):
-			new_bottom.append(0)
-
-		for r in range(center_r):
-			board[r][c] = new_top[r]
-		for r in range(center_r, _get_rows()):
-			board[r][c] = new_bottom[r - center_r]
-
-
-# 模块：坍塌 —— 消除后四个象限分别向东南西北扩散
-func _collapse_quadrant_spread() -> void:
-	var center_r: int = int(_get_rows() / 2.0)
-	var center_c: int = int(_get_cols() / 2.0)
-
-	# 第一象限（右上）：向下坍塌
-	for c in range(center_c, _get_cols()):
-		var part: Array[int] = []
-		for r in range(center_r):
-			if board[r][c] != 0:
-				part.append(board[r][c])
-		var new_part: Array[int] = []
-		for i in range(center_r - part.size()):
-			new_part.append(0)
-		new_part.append_array(part)
-		for r in range(center_r):
-			board[r][c] = new_part[r]
-
-	# 第二象限（左上）：向上坍塌
-	for c in range(center_c):
-		var part: Array[int] = []
-		for r in range(center_r):
-			if board[r][c] != 0:
-				part.append(board[r][c])
-		var new_part: Array[int] = part.duplicate()
-		while new_part.size() < center_r:
-			new_part.append(0)
-		for r in range(center_r):
-			board[r][c] = new_part[r]
-
-	# 第三象限（左下）：向左坍塌
-	for r in range(center_r, _get_rows()):
-		var part: Array[int] = []
-		for c in range(center_c):
-			if board[r][c] != 0:
-				part.append(board[r][c])
-		var new_part: Array[int] = part.duplicate()
-		while new_part.size() < center_c:
-			new_part.append(0)
-		for c in range(center_c):
-			board[r][c] = new_part[c]
-
-	# 第四象限（右下）：向右坍塌
-	for r in range(center_r, _get_rows()):
-		var part: Array[int] = []
-		for c in range(center_c, _get_cols()):
-			if board[r][c] != 0:
-				part.append(board[r][c])
-		var new_part: Array[int] = []
-		for i in range((_get_cols() - center_c) - part.size()):
-			new_part.append(0)
-		new_part.append_array(part)
-		for c in range(center_c, _get_cols()):
-			board[r][c] = new_part[c - center_c]
-
-
-func _shuffle_remaining() -> void:
-	var remaining: Array[int] = []
-	for r in range(_get_rows()):
-		for c in range(_get_cols()):
-			if board[r][c] != 0:
-				remaining.append(board[r][c])
-
-	if remaining.is_empty():
-		return
-
-	var required := mini(MIN_MATCHABLE_PAIRS, pairs_left)
-	var attempts := 0
-	while true:
-		remaining.shuffle()
-		var idx := 0
-		for r in range(_get_rows()):
-			for c in range(_get_cols()):
-				if board[r][c] != 0:
-					board[r][c] = remaining[idx]
-					idx += 1
-
-		if _count_matchable_pairs(required) >= required:
-			break
-
-		attempts += 1
-		if attempts > 2000:
-			push_warning("未能在 2000 次尝试内洗出含 %d 对可消除牌的棋盘" % required)
-			break
-
-
-# 模块：撤销 / 重做 —— 撤销上一步消除
-func _on_undo_button_pressed() -> void:
-	if move_history.is_empty() or _is_paused or _is_animating:
-		return
-
-	var last: Dictionary = move_history.pop_back()
-
-	# 保存当前状态用于重做
-	var redo_move := {
-		"board_before": board.duplicate(true),
-		"pairs_left_before": pairs_left,
-		"level_before": current_level,
-		"total_time_before": total_game_time,
-		"level_time_before": level_time,
-		"score_before": score,
-		"last_eliminate_time_before": _last_eliminate_time
-	}
-	undo_history.append(redo_move)
-
-	# 恢复到消除前的棋盘状态
-	board = last["board_before"].duplicate(true)
-	pairs_left = last["pairs_left_before"]
-	current_level = last["level_before"]
-	total_game_time = last["total_time_before"]
-	level_time = last["level_time_before"]
-	score = last["score_before"]
-	_last_eliminate_time = last["last_eliminate_time_before"]
-	selected_index = -1
-	game_state = GameState.PLAYING
-	game_over_panel.hide()
-	_pending_next_level = -1
-	custom_dialog.hide()
-	_combo_count = 0
-	_update_combo_display()
-	_update_all_cells()
-	_update_ui()
-	_update_level_info()
-	_update_time_labels()
-	_update_score_label()
-
-
-# 模块：撤销 / 重做 —— 重做一步被撤销的消除
-func _on_redo_button_pressed() -> void:
-	if undo_history.is_empty() or _is_paused or _is_animating:
-		return
-
-	var redo: Dictionary = undo_history.pop_back()
-
-	# 保存当前状态用于撤销
-	var move := {
-		"board_before": board.duplicate(true),
-		"pairs_left_before": pairs_left,
-		"level_before": current_level,
-		"total_time_before": total_game_time,
-		"level_time_before": level_time,
-		"score_before": score,
-		"last_eliminate_time_before": _last_eliminate_time
-	}
-	move_history.append(move)
-
-	# 恢复重做时的棋盘状态
-	board = redo["board_before"].duplicate(true)
-	pairs_left = redo["pairs_left_before"]
-	current_level = redo["level_before"]
-	total_game_time = redo["total_time_before"]
-	level_time = redo["level_time_before"]
-	score = redo["score_before"]
-	_last_eliminate_time = redo["last_eliminate_time_before"]
-	selected_index = -1
-	_combo_count = 0
-	_update_combo_display()
-	_update_all_cells()
-	_update_ui()
-	_update_level_info()
-	_update_time_labels()
-	_update_score_label()
-
-	if pairs_left == 0:
-		_on_level_complete()
-	elif not _has_any_match():
-		_shuffle_remaining()
-		_update_all_cells()
-
-
-# 模块：提示与洗牌 —— 高亮一对可连通的图案并画线
-func _on_hint_button_pressed() -> void:
-	if game_state != GameState.PLAYING or _hint_active or _is_paused or _is_animating:
-		return
-
-	if current_mode == GameMode.COMPETITIVE and hints_remaining <= 0:
-		return
-
-	var path: Array[Vector2i] = _find_hint_pair()
-	if path.is_empty():
-		return
-
-	if current_mode == GameMode.COMPETITIVE:
-		hints_remaining -= 1
-		_update_button_texts()
-		_update_ui()
-
-	_hint_active = true
-
-	# 让两个目标格子的图片闪烁两下
-	var start_ext: Vector2i = path[0]
-	var end_ext: Vector2i = path[path.size() - 1]
-	var start_board := Vector2i(start_ext.x - 1, start_ext.y - 1)
-	var end_board := Vector2i(end_ext.x - 1, end_ext.y - 1)
-	var start_cell: Cell = grid_container.get_child(_pos_to_index(start_board.x, start_board.y))
-	var end_cell: Cell = grid_container.get_child(_pos_to_index(end_board.x, end_board.y))
-
-	start_cell.flash()
-	end_cell.flash()
-
-	var points: PackedVector2Array = PackedVector2Array()
-	for ext_pos in path:
-		points.append(_extended_to_screen(ext_pos))
-
-	hint_line.points = points
-	await get_tree().create_timer(1.5).timeout
-	hint_line.points = PackedVector2Array()
-	_hint_active = false
-
-
-# 模块：提示与洗牌 —— 手动重排剩余图案
-func _on_shuffle_button_pressed() -> void:
-	if game_state != GameState.PLAYING or _is_paused or _is_animating:
-		return
-
-	if current_mode == GameMode.COMPETITIVE and shuffles_remaining <= 0:
-		return
-
-	if current_mode == GameMode.COMPETITIVE:
-		shuffles_remaining -= 1
-		_update_button_texts()
-
-	_shuffle_remaining()
-	selected_index = -1
-	_update_all_cells()
-	_update_ui()
-
-
-# 重新开始本局（保留总分与总用时）
-func _on_restart_button_pressed() -> void:
-	if _is_animating:
-		return
-	restart_game(false)
