@@ -109,6 +109,9 @@ const SKIN_TEXTURES := {
 	TileSkin.CLASSIC: CLASSIC_TEXTURES,
 }
 
+# 新版宝可梦图标默认缩放为 90%，避免在格子中占得过满
+const POKEMON_ICON_SCALE := Vector2(0.9, 0.9)
+
 # 当前全局图版，所有格子共用
 static var current_skin: TileSkin = TileSkin.POKEMON
 # classicPics 难度级别（保留接口，但素材已统一集中到 level3）
@@ -172,6 +175,11 @@ static func get_texture_count(skin: TileSkin = current_skin) -> int:
 	return SKIN_TEXTURES[skin].size()
 
 
+# 获取当前图版下图标的基准缩放：宝可梦图版缩小 90%，经典图版保持原大
+func _get_icon_base_scale() -> Vector2:
+	return POKEMON_ICON_SCALE if current_skin == TileSkin.POKEMON else Vector2.ONE
+
+
 # 根据 tile_type 刷新图标显示
 func update_icon() -> void:
 	if tile_type == 0:
@@ -182,10 +190,17 @@ func update_icon() -> void:
 
 # 从缓存中获取对应类型与图版的纹理
 func _get_texture(type: int) -> Texture2D:
+	return get_texture_for_type(type)
+
+
+# 静态方法：获取指定图案类型在当前图版下的纹理（供 BoardManager 坍塌动画等外部使用）
+static func get_texture_for_type(type: int) -> Texture2D:
+	if type < 1:
+		return null
 	var cache_key := int(current_skin) * 1000 + type
 	if not _texture_cache.has(cache_key):
 		var textures: Array[Texture2D] = SKIN_TEXTURES[current_skin]
-		if type < 1 or type > textures.size():
+		if type > textures.size():
 			_texture_cache[cache_key] = null
 		else:
 			_texture_cache[cache_key] = textures[type - 1]
@@ -207,8 +222,9 @@ func _set_tile_type(value: int) -> void:
 	tile_type = value
 	modulate = Color(1, 1, 1, 0) if tile_type == 0 else Color.WHITE
 	if texture_rect:
-		# 重置缩放和透明度，避免残留动画状态
-		texture_rect.scale = Vector2.ONE
+		# 重置缩放和透明度，避免残留动画状态；宝可梦图版使用 90% 基准缩放
+		texture_rect.scale = _get_icon_base_scale()
+		texture_rect.pivot_offset = texture_rect.size / 2.0
 		texture_rect.modulate = Color.WHITE
 		update_icon()
 	if selection_highlight:
@@ -221,15 +237,26 @@ func _set_selected(value: bool) -> void:
 	if selection_highlight:
 		selection_highlight.visible = selected
 	if texture_rect:
-		# 选中时轻微放大图标，未选中时恢复
+		# 选中时在基准缩放基础上轻微放大，未选中时恢复基准缩放
 		if _selection_tween != null and _selection_tween.is_valid():
 			_selection_tween.kill()
 		_selection_tween = create_tween()
 		_selection_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		var target_scale := Vector2(1.12, 1.12) if selected else Vector2.ONE
+		var base_scale := _get_icon_base_scale()
+		var target_scale := base_scale * Vector2(1.12, 1.12) if selected else base_scale
 		# 确保缩放中心为图标中心
 		texture_rect.pivot_offset = texture_rect.size / 2.0
 		_selection_tween.tween_property(texture_rect, "scale", target_scale, 0.12)
+
+
+# 强制将图标恢复为普通大小（基准缩放），用于坍塌动画前清除选中缩放等残留状态
+func reset_icon_scale_to_base() -> void:
+	if texture_rect:
+		if _selection_tween != null and _selection_tween.is_valid():
+			_selection_tween.kill()
+		_selection_tween = null
+		texture_rect.scale = _get_icon_base_scale()
+		texture_rect.pivot_offset = texture_rect.size / 2.0
 
 
 # 提示闪烁动画
@@ -243,7 +270,7 @@ func flash() -> void:
 	_flash_tween.tween_property(self, "modulate:a", 1.0, 0.25)
 
 
-# 消除动画：图标缩小并淡出，返回 Tween 供外部 await
+# 消除动画：整个格子（底色+图标）快速缩小并淡出，返回 Tween 供外部 await
 func play_eliminate_animation() -> Tween:
 	if _eliminate_tween != null and _eliminate_tween.is_valid():
 		_eliminate_tween.kill()
@@ -252,10 +279,11 @@ func play_eliminate_animation() -> Tween:
 	if texture_rect:
 		texture_rect.pivot_offset = texture_rect.size / 2.0
 		_eliminate_tween = create_tween()
-		_eliminate_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		_eliminate_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		_eliminate_tween.set_parallel(true)
-		_eliminate_tween.tween_property(texture_rect, "scale", Vector2.ZERO, 0.15)
-		_eliminate_tween.tween_property(texture_rect, "modulate:a", 0.0, 0.15)
+		# 让整个格子一起淡出，避免只有图标消失后留下底色残影
+		_eliminate_tween.tween_property(self, "modulate:a", 0.0, 0.12)
+		_eliminate_tween.tween_property(texture_rect, "scale", Vector2.ZERO, 0.12)
 		return _eliminate_tween
 	return null
 

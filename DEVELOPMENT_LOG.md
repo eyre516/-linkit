@@ -522,9 +522,9 @@ cd assets/连连看例子
   - 新增常量 `CLASSIC_TILE_SHADER` 预加载 `classic_tile.gdshader`。
   - 新增静态变量 `_classic_material`，所有经典图版格子共用同一个 `ShaderMaterial`。
   - 修改 `update_icon()`：
-    - 当 `current_skin == TileSkin.CLASSIC` 时，为 `TextureRect` 赋 `_classic_material`。
-    - 当切回宝可梦图版时，把 `material` 置空，避免影响宝可梦棋子。
-    - 空白格也同步清空 `material`。
+	- 当 `current_skin == TileSkin.CLASSIC` 时，为 `TextureRect` 赋 `_classic_material`。
+	- 当切回宝可梦图版时，把 `material` 置空，避免影响宝可梦棋子。
+	- 空白格也同步清空 `material`。
 
 **验证**：
 - 静态资源引用检查通过。
@@ -548,9 +548,9 @@ cd assets/连连看例子
 
 - `assets/classicPics/level3/normal/tile_*.png`：
   - 这些文件在第 20 步已恢复为原始黑底版本，现在用 Python + PIL + numpy 重新批量处理：
-    1. **连通域识别背景**：从图像四边开始 flood fill，只把与边界相连、且亮度 < 35 的像素标记为背景。这样即使图标内部有深色像素，只要它不连到边界，就会被保留。
-    2. **背景完全透明**：被标记为背景的像素 alpha 设为 0。
-    3. **边缘平滑过渡**：对非背景但亮度 < 90 的边界像素，按亮度线性计算 alpha，使锯齿感更弱。
+	1. **连通域识别背景**：从图像四边开始 flood fill，只把与边界相连、且亮度 < 35 的像素标记为背景。这样即使图标内部有深色像素，只要它不连到边界，就会被保留。
+	2. **背景完全透明**：被标记为背景的像素 alpha 设为 0。
+	3. **边缘平滑过渡**：对非背景但亮度 < 90 的边界像素，按亮度线性计算 alpha，使锯齿感更弱。
   - 处理了 `tile_01.png` 到 `tile_42.png` 共 42 张。
 
 **验证**：
@@ -613,8 +613,8 @@ cd assets/连连看例子
   - `StyleBoxFlat_menu_pressed` 底色从海蓝改为海沫蓝，确保深蓝文字在按下态仍有足够对比度。
   - 新增 `StyleBoxFlat_popup_hover` 子资源，作为下拉菜单项的悬停高亮背景（海沫蓝、小圆角）。
   - 为 `PopupMenu` 设置字体颜色：
-    - 普通 / 悬停 / 按下：深海蓝
-    - 禁用 / 快捷键：灰蓝色
+	- 普通 / 悬停 / 按下：深海蓝
+	- 禁用 / 快捷键：灰蓝色
   - `load_steps` 从 23 调整为 24。
 
 **验证**：
@@ -680,11 +680,11 @@ cd assets/连连看例子
 - `ocean_theme.tres`：
   - 重新生成整个主题文件，避免之前颜色调整脚本造成的重复加深和透明色被误改问题。
   - 所有浅蓝、浅粉、浅褐色统一乘以 0.88 加深一次：
-    - 浅海蓝 `#7EC8E3` → `#5AB4E0`
-    - 海沫蓝 → 对应加深
-    - 珊瑚粉 `#FFB6B9` → `#E08787`
-    - 危险粉红 `#FF8B94` → `#E07A82`
-    - 海鸟喙褐 `#D4A373` → `#BB8F65`
+	- 浅海蓝 `#7EC8E3` → `#5AB4E0`
+	- 海沫蓝 → 对应加深
+	- 珊瑚粉 `#FFB6B9` → `#E08787`
+	- 危险粉红 `#FF8B94` → `#E07A82`
+	- 海鸟喙褐 `#D4A373` → `#BB8F65`
   - 纯白、透明、深色文字、阴影等颜色保持不变。
 
 - `game.tscn`：
@@ -854,15 +854,15 @@ cd assets/连连看例子
 
 - `game.tscn`：
   - 在 `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer` 下新增 `LeaderboardPanel`（默认隐藏）：
-    - `TabRow`：三个按钮 `LeaderboardTab1/2/3`，分别显示“初级 / 中级 / 高级”。
-    - `LeaderboardContent`：`RichTextLabel`，用于显示当前难度当前页的成绩列表。
-    - `PaginationRow`：`PrevPageButton`、`LeaderboardPageLabel`、`NextPageButton`。
-    - `LeaderboardCloseButton`：关闭排行榜弹窗。
+	- `TabRow`：三个按钮 `LeaderboardTab1/2/3`，分别显示“初级 / 中级 / 高级”。
+	- `LeaderboardContent`：`RichTextLabel`，用于显示当前难度当前页的成绩列表。
+	- `PaginationRow`：`PrevPageButton`、`LeaderboardPageLabel`、`NextPageButton`。
+	- `LeaderboardCloseButton`：关闭排行榜弹窗。
 
 - `game.gd`：
   - 常量调整：
-    - `LEADERBOARD_MAX_ENTRIES` 从 `10` 改为 `1000`，以支持多页记录。
-    - 新增 `LEADERBOARD_ENTRIES_PER_PAGE := 10`。
+	- `LEADERBOARD_MAX_ENTRIES` 从 `10` 改为 `1000`，以支持多页记录。
+	- 新增 `LEADERBOARD_ENTRIES_PER_PAGE := 10`。
   - 新增状态：`_leaderboard_difficulty`、`_leaderboard_page`。
   - 新增 `@onready` 引用：`leaderboard_panel`、`leaderboard_content`、`leaderboard_page_label`、`leaderboard_close_button`、`leaderboard_tab_buttons`、`leaderboard_prev_button`、`leaderboard_next_button`。
   - 在 `_ready()` 中连接排行榜标签页、翻页、关闭按钮信号，并设置所有新按钮 `focus_mode = FOCUS_NONE`。
@@ -923,9 +923,9 @@ cd assets/连连看例子
 - 重写 `_get_leaderboard_page_text()` 中的表格生成逻辑：
   - 原先使用空格 + `[code]` 手动模拟表格，表头和数据行的格式字符串列宽不一致，导致错位。
   - 改为使用 RichTextLabel 原生 `[table=5]` 标签：
-    - 表头单独一行，5 个单元格分别显示“排名 / 姓名 / 日期 / 用时 / 分数”，并保留原来的金色加粗样式。
-    - 每个成绩作为一行，5 个单元格与表头列一一对应。
-    - 表格整体包在 `[center]` 中居中显示。
+	- 表头单独一行，5 个单元格分别显示“排名 / 姓名 / 日期 / 用时 / 分数”，并保留原来的金色加粗样式。
+	- 每个成绩作为一行，5 个单元格与表头列一一对应。
+	- 表格整体包在 `[center]` 中居中显示。
   - 这样每列宽度由该列最宽内容自动决定，数据列会严格与表头列对齐，不再依赖空格估算。
 
 **验证**：
@@ -948,30 +948,30 @@ cd assets/连连看例子
 
 1. **场景 `game.tscn`**：
    - 新增 `CompactTopBar` 面板（`VBoxContainer/CompactTopBar`），默认隐藏，包含：
-     - `CompactTimerBar`：倒计时进度条，与 `InfoBar` 中的进度条共用同一渐变填充样式。
-     - `CompactTimeLabel`：仅显示“本关用时”。
-     - `CompactScoreLabel`：显示分数。
+	 - `CompactTimerBar`：倒计时进度条，与 `InfoBar` 中的进度条共用同一渐变填充样式。
+	 - `CompactTimeLabel`：仅显示“本关用时”。
+	 - `CompactScoreLabel`：显示分数。
    - 为 `MenuBar`、`InfoBar` 以及按钮行 `HBoxContainer` 添加 `unique_name_in_owner = true`，便于脚本中统一显示/隐藏。
    - 在根节点 `Game` 下新增 `UIHideTimer`（`Timer`，`one_shot = true`，默认等待 5 秒），用于触发自动隐藏。
    - 在场景底部新增信号连接：`UIHideTimer.timeout -> _on_ui_hide_timer_timeout`。
 
 2. **脚本 `game.gd`**：
    - 新增常量：
-     - `AUTO_HIDE_DELAY := 5.0`：开局后多久自动隐藏。
-     - `TOP_TRIGGER_HEIGHT := 24.0`：鼠标移到屏幕顶部多少像素内触发恢复。
-     - `TOP_HIDE_DELAY := 1.5`：鼠标离开顶部后多久重新隐藏。
+	 - `AUTO_HIDE_DELAY := 5.0`：开局后多久自动隐藏。
+	 - `TOP_TRIGGER_HEIGHT := 24.0`：鼠标移到屏幕顶部多少像素内触发恢复。
+	 - `TOP_HIDE_DELAY := 1.5`：鼠标离开顶部后多久重新隐藏。
    - 新增状态变量 `_ui_hidden`、`_top_leave_time`，以及紧凑进度条脉冲动画引用 `_compact_timer_pulse_tween`。
    - 新增节点引用：`compact_timer_bar`、`compact_time_label`、`compact_score_label`、`menu_bar`、`info_bar`、`toolbar`、`compact_top_bar`、`ui_hide_timer`。
    - 在 `_ready()` 中连接 `ui_hide_timer.timeout`。
    - 在 `_set_paused()` 中同步 `ui_hide_timer.paused`，暂停/继续时计时器不会继续走动。
    - 在 `restart_game()` 中：
-     - 重置 `_ui_hidden` 与 `_top_leave_time`。
-     - 调用 `_show_full_ui()` 恢复完整顶部 UI。
-     - 启动 `ui_hide_timer`（5 秒）。
+	 - 重置 `_ui_hidden` 与 `_top_leave_time`。
+	 - 调用 `_show_full_ui()` 恢复完整顶部 UI。
+	 - 启动 `ui_hide_timer`（5 秒）。
    - 新增 `_update_ui_visibility(delta)`：
-     - 仅在游戏进行中且未暂停时生效。
-     - 鼠标位于屏幕顶部 `TOP_TRIGGER_HEIGHT` 以内时，立即恢复完整 UI。
-     - 鼠标离开顶部且 5 秒倒计时已结束，经过 `TOP_HIDE_DELAY` 后切换到紧凑 UI。
+	 - 仅在游戏进行中且未暂停时生效。
+	 - 鼠标位于屏幕顶部 `TOP_TRIGGER_HEIGHT` 以内时，立即恢复完整 UI。
+	 - 鼠标离开顶部且 5 秒倒计时已结束，经过 `TOP_HIDE_DELAY` 后切换到紧凑 UI。
    - 新增 `_show_compact_ui()` / `_show_full_ui()`：统一控制三行（菜单栏、信息栏、按钮行）与紧凑面板的显隐。
    - 新增 `_update_compact_ui()`：刷新紧凑面板的倒计时条、本关用时与分数。
    - 新增 `_on_ui_hide_timer_timeout()`：5 秒到达后，若鼠标不在屏幕顶部则切换到紧凑 UI。
@@ -1003,19 +1003,19 @@ cd assets/连连看例子
    - 在 `game.tscn` 的 `CanvasLayer` 中新增 `AutoHideHint` 标签，默认隐藏，位于顶部居中（`anchors_preset = 10`），文字为“将鼠标移到屏幕顶部即可恢复菜单栏”。
    - 在根节点新增 `HintHideTimer`（`Timer`，`one_shot = true`，等待 20 秒）。
    - 在 `game.gd` 中：
-     - 新增节点引用 `auto_hide_hint`、`hint_hide_timer`，以及状态变量 `_auto_hide_hint_shown`。
-     - 在 `_ready()` 中连接 `hint_hide_timer.timeout`。
-     - `_show_compact_ui()` 首次切换到紧凑模式时显示提示并启动 20 秒倒计时；同一局游戏内不会重复显示。
-     - `_show_full_ui()` 恢复完整 UI 时立即隐藏提示并停止倒计时。
-     - 新增 `_on_hint_hide_timer_timeout()`：20 秒到后自动隐藏提示。
-     - `restart_game()` 重置 `_auto_hide_hint_shown = false`，保证每局重新显示一次。
+	 - 新增节点引用 `auto_hide_hint`、`hint_hide_timer`，以及状态变量 `_auto_hide_hint_shown`。
+	 - 在 `_ready()` 中连接 `hint_hide_timer.timeout`。
+	 - `_show_compact_ui()` 首次切换到紧凑模式时显示提示并启动 20 秒倒计时；同一局游戏内不会重复显示。
+	 - `_show_full_ui()` 恢复完整 UI 时立即隐藏提示并停止倒计时。
+	 - 新增 `_on_hint_hide_timer_timeout()`：20 秒到后自动隐藏提示。
+	 - `restart_game()` 重置 `_auto_hide_hint_shown = false`，保证每局重新显示一次。
 
 2. **棋盘边距加倍**：
    - 在 `game.tscn` 中把 `VBoxContainer` 的四周偏移从 `4.0` 改为 `8.0`：
-     - `offset_left`：`4.0` → `8.0`
-     - `offset_top`：`4.0` → `8.0`
-     - `offset_right`：`-4.0` → `-8.0`
-     - `offset_bottom`：`-4.0` → `-8.0`
+	 - `offset_left`：`4.0` → `8.0`
+	 - `offset_top`：`4.0` → `8.0`
+	 - `offset_right`：`-4.0` → `-8.0`
+	 - `offset_bottom`：`-4.0` → `-8.0`
    - 这样整个游戏内容区（含棋盘）距离窗口四周的边距从 4 像素变为 8 像素，即原来的 2 倍。
 
 **验证**：
@@ -1099,24 +1099,24 @@ cd assets/连连看例子
 1. **场景 `game.tscn`**：
    - 将 `CanvasLayer/AutoHideHint` 从 `Label` 改为 `RichTextLabel`。
    - 文字改为每个汉字独占一行，实现竖排效果：
-     ```
-     将
-     鼠
-     标
-     移
-     到
-     屏
-     幕
-     顶
-     部
-     即
-     可
-     恢
-     复
-     菜
-     单
-     栏
-     ```
+	 ```
+	 将
+	 鼠
+	 标
+	 移
+	 到
+	 屏
+	 幕
+	 顶
+	 部
+	 即
+	 可
+	 恢
+	 复
+	 菜
+	 单
+	 栏
+	 ```
    - 锚点设为左侧居中（`anchors_preset = 9`），`offset_left = 16.0`，整体位于屏幕左侧。
    - 字体大小从 20 提高到 36（`theme_override_font_sizes/normal_font_size = 36`）。
    - 开启 `bbcode_enabled` 并给文字加上浅色（`#FFF8F0`），保证在各种背景下可读。
@@ -1227,10 +1227,10 @@ cd assets/连连看例子
 
 1. **脚本 `game.gd`**：
    - `_show_compact_ui()` 中：
-     - 每次闪烁的淡出/淡入时间从 0.25 秒延长到 0.75 秒，单次完整闪烁（淡出 + 淡入）从 0.5 秒变为 1.5 秒。
-     - 闪烁 3 次后，不再立即隐藏，而是启动 `hint_hide_timer` 停留 5 秒。
+	 - 每次闪烁的淡出/淡入时间从 0.25 秒延长到 0.75 秒，单次完整闪烁（淡出 + 淡入）从 0.5 秒变为 1.5 秒。
+	 - 闪烁 3 次后，不再立即隐藏，而是启动 `hint_hide_timer` 停留 5 秒。
    - `_on_hint_hide_timer_timeout()`：
-     - 5 秒停留结束后隐藏提示并恢复透明度。
+	 - 5 秒停留结束后隐藏提示并恢复透明度。
    - 注释同步更新为“闪烁 3 次后再停留 5 秒”。
 
 2. **场景 `game.tscn`**：
@@ -1257,15 +1257,15 @@ cd assets/连连看例子
 
 1. **场景 `game.tscn`**：
    - 在 `CanvasLayer` 中新增 `MatchLine`（`Line2D`），样式与 `HintLine` 相同：
-     - `width = 4.0`
-     - `default_color = Color(0.88, 0.628, 0.638, 1)`
+	 - `width = 4.0`
+	 - `default_color = Color(0.88, 0.628, 0.638, 1)`
 
 2. **脚本 `game.gd`**：
    - 新增节点引用 `@onready var match_line: Line2D = %MatchLine`。
    - 在 `_on_cell_clicked()` 中，确认两个图块可以连通后：
-     - 调用 `_find_connection_path(r1, c1, r, c)` 获取连接路径。
-     - 用 `_extended_to_screen()` 把路径上的扩展坐标转换为屏幕坐标。
-     - 赋值给 `match_line.points`，立即画出连接路径。
+	 - 调用 `_find_connection_path(r1, c1, r, c)` 获取连接路径。
+	 - 用 `_extended_to_screen()` 把路径上的扩展坐标转换为屏幕坐标。
+	 - 赋值给 `match_line.points`，立即画出连接路径。
    - 消除动画播放完毕后，清空 `match_line.points`，让路径消失。
 
 **验证**：
@@ -1295,32 +1295,32 @@ cd assets/连连看例子
 
 2. **脚本 `game.gd`**：
    - 新增常量：
-     - `SCHEME_1_FLOATING_TEXT_ENABLED := true`：方案 1 总开关，便于后续单独关闭或移除。
-     - `COMBO_FAST_THRESHOLD := 5.0`：5 秒内消除算一次连击。
-     - `COMBO_MAX_DISPLAY := 5`：连击显示上限。
-     - 分数等级颜色：`SCORE_COLOR_GOLD`（30 分）、`SCORE_COLOR_SILVER`（20 分）、`SCORE_COLOR_BRONZE`（15 分）、`SCORE_COLOR_NORMAL`（其他）。
+	 - `SCHEME_1_FLOATING_TEXT_ENABLED := true`：方案 1 总开关，便于后续单独关闭或移除。
+	 - `COMBO_FAST_THRESHOLD := 5.0`：5 秒内消除算一次连击。
+	 - `COMBO_MAX_DISPLAY := 5`：连击显示上限。
+	 - 分数等级颜色：`SCORE_COLOR_GOLD`（30 分）、`SCORE_COLOR_SILVER`（20 分）、`SCORE_COLOR_BRONZE`（15 分）、`SCORE_COLOR_NORMAL`（其他）。
    - 新增状态变量：
-     - `_last_points: int`：最近一次消除获得的分数。
-     - `_combo_count: int`：当前连击次数。
+	 - `_last_points: int`：最近一次消除获得的分数。
+	 - `_combo_count: int`：当前连击次数。
    - 新增节点引用：`score_popup`、`score_gain_label`、`combo_label`、`compact_combo_label`。
    - 修改 `_eliminate()`：
-     - 计算分数后保存到 `_last_points`。
-     - 根据消除间隔更新 `_combo_count`：5 秒内连击 +1，否则重置为 1。
-     - 调用 `_update_combo_display()`。
-     - 调用 `_emphasize_score_label(points)`，传入分数以决定脉冲颜色。
+	 - 计算分数后保存到 `_last_points`。
+	 - 根据消除间隔更新 `_combo_count`：5 秒内连击 +1，否则重置为 1。
+	 - 调用 `_update_combo_display()`。
+	 - 调用 `_emphasize_score_label(points)`，传入分数以决定脉冲颜色。
    - 修改 `_on_cell_clicked()`：
-     - 消除计分后，计算两个被消除格子的中点，调用 `_show_score_feedback(_last_points, mid_point)`。
+	 - 消除计分后，计算两个被消除格子的中点，调用 `_show_score_feedback(_last_points, mid_point)`。
    - 新增 `_show_score_feedback(points, match_midpoint)`：
-     - 方案 1：调用 `_spawn_floating_score()` 在消除位置飘出带等级色的 `+N`。
-     - 方案 2：在可见的分数标签（`score_label` 或 `compact_score_label`）右侧弹出 `+N`，同时向上飘动淡出。
+	 - 方案 1：调用 `_spawn_floating_score()` 在消除位置飘出带等级色的 `+N`。
+	 - 方案 2：在可见的分数标签（`score_label` 或 `compact_score_label`）右侧弹出 `+N`，同时向上飘动淡出。
    - 新增 `_spawn_floating_score(points, pos)`：
-     - 设置飘字内容、颜色、位置，向上移动 50 像素并逐渐透明，1 秒后消失。
+	 - 设置飘字内容、颜色、位置，向上移动 50 像素并逐渐透明，1 秒后消失。
    - 修改 `_emphasize_score_label(points)`：
-     - 根据分数返回等级色。
-     - 脉冲当前可见的分数标签（完整模式用 `score_label`，紧凑模式用 `compact_score_label`）。
+	 - 根据分数返回等级色。
+	 - 脉冲当前可见的分数标签（完整模式用 `score_label`，紧凑模式用 `compact_score_label`）。
    - 新增 `_update_combo_display()`：
-     - 连击大于 1 时，在 `ComboLabel` 和 `CompactComboLabel` 显示“连击 xN”。
-     - 连击为 1 或以下时清空文本。
+	 - 连击大于 1 时，在 `ComboLabel` 和 `CompactComboLabel` 显示“连击 xN”。
+	 - 连击为 1 或以下时清空文本。
    - 新增 `_get_score_tier_color(points)`：根据分数返回对应等级颜色。
    - `restart_game()` 中重置 `_combo_count = 0` 并刷新连击显示。
    - 撤销/重做时重置连击计数，避免时间倒流后连击逻辑不一致。
@@ -1347,26 +1347,26 @@ cd assets/连连看例子
 
 1. **脚本 `game.gd`**：
    - 调整分数等级颜色，全部改为更亮更饱和的色号：
-     - 30 分金色：`#E0B45A` → `#FFD700`
-     - 20 分银色：`#C0C0C0` → `#E0E0E0`
-     - 15 分铜色：`#CD7F32` → `#FF8C00`
-     - 其他白色：`#FFF8F0` → `#FFFFFF`
+	 - 30 分金色：`#E0B45A` → `#FFD700`
+	 - 20 分银色：`#C0C0C0` → `#E0E0E0`
+	 - 15 分铜色：`#CD7F32` → `#FF8C00`
+	 - 其他白色：`#FFF8F0` → `#FFFFFF`
    - `ScoreGainLabel` 弹出文字加 `[b]` 粗体。
    - 连击标签文字使用新的金色常量并加粗：`[color=#FFD700][b]连击 xN[/b][/color]`。
 
 2. **场景 `game.tscn`**：
    - `ScorePopup`：
-     - 字号 `28` → `40`。
-     - 增加黑色描边：`outline_size = 5`，让飘字在复杂背景上更清晰。
-     - 尺寸调整为 `100×50`。
+	 - 字号 `28` → `40`。
+	 - 增加黑色描边：`outline_size = 5`，让飘字在复杂背景上更清晰。
+	 - 尺寸调整为 `100×50`。
    - `ScoreGainLabel`：
-     - 字号 `26` → `32`。
-     - `bold_font_size` 同样设为 `32`。
-     - 尺寸调整为 `90×40`。
+	 - 字号 `26` → `32`。
+	 - `bold_font_size` 同样设为 `32`。
+	 - 尺寸调整为 `90×40`。
    - `ComboLabel` / `CompactComboLabel`：
-     - `custom_minimum_size` 高度 `34` → `40`。
-     - 字号 `normal_font_size` 和 `bold_font_size` 都设为 `28`。
-     - 默认示例文字改为 `[color=#FFD700][b]连击 x2[/b][/color]`。
+	 - `custom_minimum_size` 高度 `34` → `40`。
+	 - 字号 `normal_font_size` 和 `bold_font_size` 都设为 `28`。
+	 - 默认示例文字改为 `[color=#FFD700][b]连击 x2[/b][/color]`。
 
 **验证**：
 - 静态检查场景与脚本，引用和 BBCode 格式正确。
@@ -1394,9 +1394,9 @@ cd assets/连连看例子
 
 2. **连击越快停留越久**：
    - 在 `_spawn_floating_score()` 中根据当前 `_combo_count` 动态调整停留和淡出时间：
-     - 0-1 连击：停留 0.3 秒，淡出 0.7 秒（总计 1.0 秒）。
-     - 2-3 连击：停留 0.6 秒，淡出 0.9 秒（总计 1.5 秒）。
-     - 4+ 连击：停留 1.0 秒，淡出 1.0 秒（总计 2.0 秒）。
+	 - 0-1 连击：停留 0.3 秒，淡出 0.7 秒（总计 1.0 秒）。
+	 - 2-3 连击：停留 0.6 秒，淡出 0.9 秒（总计 1.5 秒）。
+	 - 4+ 连击：停留 1.0 秒，淡出 1.0 秒（总计 2.0 秒）。
    - 动画分为两段：先保持满透明度停留，再向上飘动淡出，让玩家有足够时间看清分数。
 
 3. **初始化**：
@@ -1459,10 +1459,10 @@ cd assets/连连看例子
 1. **场景 `game.tscn`**：
    - 新增 `AutoHideHintBg`（`ColorRect`）作为提示背景，半透明深色，位于提示文字后方，增强可读性。
    - `AutoHideHint`：
-     - 字号从 `36` 提升到 `42`。
-     - 文字颜色改为亮金色 `#FFD700`。
-     - 增加 `6` 像素黑色描边，让文字在任何背景下都清晰。
-     - 文字加粗。
+	 - 字号从 `36` 提升到 `42`。
+	 - 文字颜色改为亮金色 `#FFD700`。
+	 - 增加 `6` 像素黑色描边，让文字在任何背景下都清晰。
+	 - 文字加粗。
 
 2. **脚本 `game.gd`**：
    - 新增 `auto_hide_hint_bg` 节点引用。
@@ -1731,8 +1731,8 @@ cd assets/连连看例子
 - `game.gd`：
   - 新增 `enum GameMode {CASUAL, COMPETITIVE}`。
   - 新增竞技模式常量：
-    - 第 1–7 关：5 次提示、2 次洗牌
-    - 第 8–10 关：8 次提示、3 次洗牌
+	- 第 1–7 关：5 次提示、2 次洗牌
+	- 第 8–10 关：8 次提示、3 次洗牌
   - 新增状态变量 `current_mode`、`hints_remaining`、`shuffles_remaining`。
   - 新增 `@onready var mode_label: RichTextLabel = %ModeLabel`。
   - `_setup_menus()` 中在 `GameMenu` 下新增“模式”子菜单，含“休闲模式”与“竞技模式”两个可勾选条目。
@@ -1742,8 +1742,8 @@ cd assets/连连看例子
   - `_on_hint_button_pressed()` 与 `_on_shuffle_button_pressed()` 在竞技模式下消耗次数，次数为 0 时不响应。
   - `_set_paused()` 与 `_update_ui()` 中根据模式与剩余次数禁用/启用提示、洗牌按钮。
   - 新增 `_update_mode_label()` 与 `_update_button_texts()`：
-    - 休闲模式按钮显示“💡 提示”、“🔀 洗牌”。
-    - 竞技模式按钮显示剩余次数，如“💡 提示(5)”、“🔀 洗牌(2)”。
+	- 休闲模式按钮显示“💡 提示”、“🔀 洗牌”。
+	- 竞技模式按钮显示剩余次数，如“💡 提示(5)”、“🔀 洗牌(2)”。
 
 - `game.tscn`：
   - 在 `VBoxContainer/MenuBar/HBoxContainer` 的 `Spacer` 与 `TimeLabel` 之间新增 `ModeLabel`（`%ModeLabel`）RichTextLabel，显示当前模式。
@@ -1802,8 +1802,8 @@ cd assets/连连看例子
   - `DialogType` 枚举新增 `MODE_RULES`。
   - `_setup_menus()` 中在 `帮助` 菜单的“连连看规则”之后新增“模式说明”项。
   - `_on_help_menu_item_pressed(index)` 中新增索引 1 的处理分支：
-    - 弹窗标题为“模式说明”。
-    - 内容说明休闲模式无限提示/洗牌，竞技模式按关卡分配固定次数（1–7 关 5/2，8–10 关 8/3）。
+	- 弹窗标题为“模式说明”。
+	- 内容说明休闲模式无限提示/洗牌，竞技模式按关卡分配固定次数（1–7 关 5/2，8–10 关 8/3）。
   - 原有“快捷键说明”“积分规则”“关于”的索引依次后移 1 位。
 
 **验证**：
@@ -2087,3 +2087,540 @@ cd assets/连连看例子
 **验证**：
 - 使用 Godot 4.5.1 命令行 `--headless --quit` 重新加载项目，无脚本错误。
 - 建议在 Godot 编辑器中运行并点击棋盘棋子，确认可选中、可消除、错误点击可切换选中。
+
+---
+
+### 77. 为关卡 2–10 的坍塌效果添加位移动画
+
+**时间**：2026-07-17  
+**涉及文件**：`managers/board_manager.gd`、`cell.gd`、`game.gd`
+
+**原因**：此前第 2–10 关消除后，棋盘会瞬间按关卡规则重新排列，缺少视觉过渡。需要为坍塌添加平滑的位移动画，让剩余图案像“滑动”到新位置一样。
+
+**改动**：
+
+1. **`cell.gd`**：
+   - 新增静态方法 `get_texture_for_type(type: int) -> Texture2D`，让外部管理器无需关心纹理缓存细节即可获取当前图版的图标纹理。
+
+2. **`managers/board_manager.gd`**：
+   - `apply_collapse()` 返回类型从 `void` 改为 `Tween`，并新增 `duration` 参数（默认 0.22 秒）。
+   - 新增 `_build_movement_map(old_board, new_board)`：按图案类型收集坍塌前后的位置，按行主序一一匹配，生成 `{old_pos, new_pos, tile_type}` 移动列表（相同图案不可区分，匹配结果在视觉上可接受）。
+   - 新增 `_get_cell_global_position(r, c)`、`_create_ghost_tile(tile_type, size)` 辅助函数。
+   - 新增 `_animate_collapse(old_board, duration)`：
+	 - 立即把实际棋盘更新到坍塌后状态，但把发生移动的目标格子透明度设为 0。
+	 - 为每个移动创建图标“幽灵”（`TextureRect`），初始位置为旧格子全局位置，使用 `top_level` 避免被 `GridContainer` 重新布局。
+	 - 并行动画将所有幽灵滑动到新格子全局位置。
+	 - 动画结束后清理幽灵并恢复目标格子可见。
+   - 第 1 关或棋盘未变化时直接返回 `null`，跳过动画。
+
+3. **`game.gd`**：
+   - `_on_cell_clicked()` 中消除后调用 `board_manager.apply_collapse(...)`，若返回非空 Tween 则 `await tween.finished`，再执行 `update_all_cells()` 与后续流程。
+
+**验证**：
+
+- 使用 Godot 4.5.1 命令行 `--headless --quit` 加载项目，无脚本错误，成功打印 `game started!`。
+- 建议在编辑器中进入第 2–10 关进行消除，确认剩余图案以幽灵形式平滑滑动到新位置，动画结束后棋盘可继续正常点击。
+
+---
+
+### 78. 优化坍塌动画：幽灵改为完整格子（底色+图标一起移动）
+
+**时间**：2026-07-17  
+**涉及文件**：`managers/board_manager.gd`
+
+**原因**：初次实现的坍塌动画只移动了图标 `TextureRect`，导致“格子底色先消失 → 图标移动 → 底色再出现”的分层效果，视觉上不自然。需要让底色和图标作为整体一起滑动。
+
+**改动**：
+
+- `managers/board_manager.gd`：
+  - 移除 `_create_ghost_tile(tile_type, size)`（仅创建图标幽灵）。
+  - 新增 `_create_ghost_from_cell(source_cell: Cell) -> PanelContainer`：
+	- 通过 `source_cell.duplicate()` 复制完整格子（含 PanelContainer 底色、MarginContainer、TextureRect 图标）。
+	- 调用 `set_script(null)` 移除 `Cell` 脚本，避免幽灵运行 `_ready()` 产生不必要的动画或信号。
+	- 设置 `mouse_filter = MOUSE_FILTER_IGNORE`，禁用输入。
+	- 隐藏选中高亮层，重置图标缩放与透明度。
+  - `_animate_collapse()` 中改为：
+	- 根据 `movement.old_pos` 找到源格子。
+	- 使用 `_create_ghost_from_cell()` 创建幽灵，初始位置/大小与源格子一致。
+	- 动画目标仍为新格子的全局位置。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中进入第 2–10 关消除，确认坍塌时整个格子（背景+图标）一起平滑滑动到新位置，不再出现底色与图标分离的现象。
+
+---
+
+### 79. 优化消除动画，避免格子底色残影
+
+**时间**：2026-07-17  
+**涉及文件**：`cell.gd`、`game.gd`
+
+**原因**：消除时只有图标缩小时，PanelContainer 的格子底色仍会多停留一段时间，产生“残影”感，视觉效果不利索。需要让整格（底色+图标）同步、快速地消失。
+
+**改动**：
+
+1. **`cell.gd`**：
+   - `play_eliminate_animation()` 中：
+	 - 动画时长从 0.15 秒缩短到 0.12 秒。
+	 - 缓动从 `TRANS_BACK`/`EASE_IN` 改为更干脆的 `TRANS_QUAD`/`EASE_IN`。
+	 - 新增对 `self.modulate:a` 的渐变到 0，使整个格子（含底色）一起淡出。
+	 - 保留 `texture_rect.scale` 到 0，让图标同步缩小。
+
+2. **`game.gd`**：
+   - `_on_cell_clicked()` 中消除动画结束后，立即设置 `cell1.tile_type = 0` 和 `cell2.tile_type = 0`，确保状态同步并彻底消除任何可能的残留显示。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中点击可消除的格子对，确认消除时整格迅速淡出缩小，没有底色残留。
+
+---
+
+### 80. 优化坍塌动画性能 + 菜单悬停时不收起顶部 UI
+
+**时间**：2026-07-17  
+**涉及文件**：`managers/board_manager.gd`、`game.gd`
+
+**原因**：
+1. 用户反馈坍塌动画过程中帧数不够高、不够丝滑；同时需要鼠标停留在菜单及下拉项时，顶部 UI 不要自动收起。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（坍塌动画性能优化）：
+   - `_create_ghost_from_cell()` 不再 `duplicate()` 整个带脚本的 `Cell`，改为手动创建轻量节点：
+	 - 一个 `PanelContainer` 复制源格子的 `panel` 样式盒作为底色。
+	 - 一个 `TextureRect` 作为图标，大小/位置与源格子的图标完全一致。
+   - 幽灵节点数从原来的 3 个（PanelContainer + MarginContainer + TextureRect）+ 脚本开销，减少到 2 个无脚本节点，降低创建与动画过程中的布局/脚本开销。
+   - 坍塌动画缓动从 `TRANS_QUAD` 改为 `TRANS_QUINT`，运动曲线更平滑。
+
+2. **`game.gd`**（菜单悬停不收起顶部 UI）：
+   - 新增成员变量 `_popup_menus: Array[PopupMenu]`，在 `_setup_menus()` 中记录所有弹出菜单。
+   - 新增 `_is_mouse_over_menu()`：判断鼠标是否在菜单栏内，或是否有任意弹出菜单处于可见状态。
+   - `_update_ui_visibility()` 与 `_on_ui_hide_timer_timeout()` 中，当鼠标位于菜单栏或任意菜单/下拉项上时，重置离开计时并保持完整 UI 显示。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中进入第 2–10 关触发坍塌，确认动画更流畅、残影减少。
+- 建议将鼠标悬停在 Game / Options / Help / Skin 菜单及其下拉项上，确认顶部菜单栏不会自动收起。
+
+
+---
+
+## 2026-07-18 13:27
+
+**原因**：运行时报错 `02:150 _is_mouse_over_menu: Invalid call. Nonexistent function 'get_global_rect' in base 'PopupMenu'.`
+
+**改动**：
+
+1. **`game.gd`**（修复 PopupMenu 的 `get_global_rect` 非法调用）：
+   - 在 `_is_mouse_over_menu()` 中移除对 `PopupMenu` 调用 `get_global_rect()` 的代码。
+   - Godot 4 中 `PopupMenu` 继承自 `Window`，而 `Window` 不是 `Control`，没有 `get_global_rect()` 方法。
+   - 保留 `popup.visible` 判断：只要任意弹出菜单处于打开状态，就保持完整 UI 显示，避免菜单交互时顶部 UI 自动收起。
+
+**影响位置**：
+
+- `game.gd` 第 846–853 行：`_is_mouse_over_menu()` 中的弹出菜单检测逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 在编辑器中打开 Game / Options / Help / Skin 菜单，确认控制台不再出现 `get_global_rect` 报错。
+- 将鼠标悬停在已打开的菜单上，确认顶部菜单栏不会自动收起。
+
+
+---
+
+## 2026-07-18 13:30
+
+**原因**：用户反馈坍塌动画中，被移动的格子在原地仍然可见，与滑动中的幽灵重叠，视觉上不够流畅。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（坍塌动画立即隐藏原位置格子）：
+   - `_animate_collapse()` 中不再只隐藏目标位置格子，而是收集所有参与移动的「旧位置」和「新位置」索引。
+   - 动画开始前立即将这些受影响格子的 `tile_type` 更新为坍塌后的棋盘状态，并设置 `modulate.a = 0.0`。
+   - 旧位置格子会因此变成空白并立即消失；新位置格子在动画期间由幽灵代替，动画结束后再恢复可见。
+   - 动画结束后的清理逻辑改为恢复所有 `affected_indices`，而不再是仅恢复 `destination_indices`。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 536–581 行：`_animate_collapse()` 中的隐藏/恢复逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中进入第 2–10 关触发坍塌，确认格子从原位置消失后，只有幽灵滑动到新位置，动画更流畅。
+
+
+## 2026-07-25 11:59
+
+**原因**：修复脚本运行时错误 `(585, 20): Identifier "affected_indices" not declared in the current scope.`。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（声明 `affected_indices`）：
+   - 在 `_animate_collapse()` 中，将 `source_indices` 与 `destination_indices` 合并为新的 `affected_indices: Array[int]`。
+   - 动画结束后的 lambda 现在可以正确引用该数组，恢复所有参与坍塌动画的格子可见性。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 549–555 行：新增 `affected_indices` 的合并构造逻辑。
+- `managers/board_manager.gd` 第 593 行：lambda 中 `for idx in affected_indices:` 现在指向有效变量。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+
+
+## 2026-07-25 12:00
+
+**原因**：用户反馈新版宝可梦图版图标占满格子，希望图标缩小为当前的 90%。
+
+**改动**：
+
+1. **`cell.gd`**（宝可梦图标缩放）：
+   - 新增常量 `POKEMON_ICON_SCALE := Vector2(0.9, 0.9)`。
+   - 新增 `_get_icon_base_scale()`，仅对 `TileSkin.POKEMON` 返回 0.9 缩放，经典图版仍保持 `Vector2.ONE`。
+   - `_set_tile_type()` 重置图标缩放时使用 `_get_icon_base_scale()`，并设置中心为 pivot。
+   - `_set_selected()` 在基准缩放基础上乘以 1.12 作为选中放大目标，确保宝可梦图标常态 90%、选中时仍保持协调比例。
+
+**影响位置**：
+
+- `cell.gd` 第 112–113 行：新增 `POKEMON_ICON_SCALE` 常量。
+- `cell.gd` 第 178–180 行：新增 `_get_icon_base_scale()`。
+- `cell.gd` 第 224–229 行：`_set_tile_type()` 使用基准缩放重置。
+- `cell.gd` 第 245–249 行：`_set_selected()` 基于基准缩放计算目标缩放。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行并切换到宝可梦图版，确认图标四周留出间隙，整体不再顶格。
+
+
+## 2026-07-25 12:01
+
+**原因**：用户希望游戏启动时默认进入竞技模式。
+
+**改动**：
+
+1. **`game.gd`**（默认模式）：
+   - 将 `current_mode` 的初始值从 `GameMode.CASUAL` 改为 `GameMode.COMPETITIVE`。
+   - 启动后模式菜单勾选、模式标签、提示/洗牌次数限制均会按竞技模式初始化。
+
+**影响位置**：
+
+- `game.gd` 第 91 行：`var current_mode: GameMode = GameMode.COMPETITIVE`。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认界面模式标签显示为“竞技”，提示/洗牌按钮显示剩余次数。
+
+
+## 2026-07-25 12:02
+
+**原因**：用户希望欢迎弹窗将游戏规则与操作说明分列在屏幕左右两侧，中间用醒目风格突出显示【必看】内容。
+
+**改动**：
+
+1. **`game.gd`**（欢迎弹窗布局）：
+   - `_show_welcome_dialog()` 的内容从单栏居中改为 `[table=3]` 三栏布局。
+   - 左列：【游戏规则】，深棕底色（`#3A2515`）。
+   - 中列：【必看】，深红底色（`#5A1A1A`），标题使用更大的金色字体，正文加粗，视觉更醒目。
+   - 右列：【操作说明】，深蓝灰底色（`#1A2A3A`）。
+   - 中间【必看】文案为："本游戏分竞技模式与休闲模式；鼠标右键提示，双击暂停。"
+
+**影响位置**：
+
+- `game.gd` 第 557–587 行：`_show_welcome_dialog()` 的 `content` 字符串构造。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认欢迎弹窗显示为三栏，中间【必看】列颜色与字号明显突出。
+
+
+## 2026-07-25 12:03
+
+**原因**：用户希望欢迎弹窗三栏宽度更规范：左右游戏规则与操作说明等宽且同色，中间【必看】改为淡红底色。
+
+**改动**：
+
+1. **`game.gd`**（欢迎弹窗三栏样式调整）：
+   - 三列均使用 `[cell width=380 ...]` 固定等宽。
+   - 左列（游戏规则）与右列（操作说明）统一使用 `#2A3A4A` 背景色。
+   - 中列【必看】背景改为淡红色 `#FFCCCC`。
+   - 中列文字颜色调整为深红/红色以保证在淡红底色上的可读性：标题 `#CC0000`，正文 `#660000` / `#CC0000`。
+
+**影响位置**：
+
+- `game.gd` 第 557–587 行：`_show_welcome_dialog()` 的 `[table=3]` 内容字符串。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认左右两栏宽度、底色一致，中间【必看】为淡红色背景。
+
+
+## 2026-07-25 12:04
+
+**原因**：RichTextLabel 的 `[table]` 无法实现稳定等宽列，且用户对中间【必看】文字样式不满意。改用真实 UI 布局实现三栏欢迎弹窗。
+
+**改动**：
+
+1. **`game.tscn`**（欢迎弹窗专用三栏布局）：
+   - 在 `CustomDialog/CenterContainer/VBoxContainer` 中新增 `WelcomePanel`（HBoxContainer），默认隐藏。
+   - `WelcomePanel` 内包含三个 `PanelContainer`：`RulePanel`、`MustReadPanel`、`OpPanel`。
+   - 三个 PanelContainer 均设置 `size_flags_horizontal = 3`，由 HBoxContainer 平均分配宽度，确保左右两列严格等宽。
+   - `RulePanel` 与 `OpPanel` 共用 `StyleBoxFlat_welcome_side`（深蓝灰 `#2A3A4A`，圆角 8）。
+   - `MustReadPanel` 使用 `StyleBoxFlat_welcome_center`（淡红 `#FFCCCC`，圆角 8）。
+   - 每个 PanelContainer 内放置一个 `RichTextLabel` 显示对应文本，字号调小以保持协调。
+
+2. **`game.gd`**（逻辑适配）：
+   - 新增 `@onready` 引用：`welcome_panel`、`welcome_rule_label`、`welcome_must_read_label`、`welcome_op_label`。
+   - `_show_welcome_dialog()` 不再拼接单个大字符串，而是分别设置三个 RichTextLabel 的文本。
+   - 中间【必看】文字改为非加粗，颜色使用 `#8B0000` / `#660000`，在淡红底色上更协调。
+   - `_show_custom_dialog()` 增加 `WELCOME` 分支，显示 `WelcomePanel` 并隐藏 `dialog_content`。
+   - `_hide_custom_dialog()` 及所有直接 `custom_dialog.hide()` 处同步隐藏 `welcome_panel`，避免弹窗关闭后残留。
+
+**影响位置**：
+
+- `game.tscn` 第 23–40 行：新增两个 `StyleBoxFlat` 子资源。
+- `game.tscn` 第 733–790 行：新增 `WelcomePanel` 及三栏节点。
+- `game.gd` 第 185–193 行：新增 `@onready` 节点引用。
+- `game.gd` 第 557–587 行：`_show_welcome_dialog()` 重写为设置三栏标签。
+- `game.gd` 第 1014–1040 行：`_show_custom_dialog()` 增加 WELCOME 分支。
+- `game.gd` 第 1044–1056 行：`_hide_custom_dialog()` 隐藏 `welcome_panel`。
+- `game.gd` 第 1277、1615 行：直接隐藏弹窗处补充 `welcome_panel.hide()`。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认欢迎弹窗三栏等宽、左右同色、中间淡红，文字不再加粗且清晰可读。
+
+
+## 2026-07-25 12:05
+
+**原因**：用户希望欢迎弹窗中间【必看】列宽度为左右两列的 1.5 倍。
+
+**改动**：
+
+1. **`game.tscn`**（三栏宽度比例）：
+   - `RulePanel` 与 `OpPanel` 的 `size_flags_stretch_ratio` 设为 `1.0`。
+   - `MustReadPanel` 的 `size_flags_stretch_ratio` 设为 `1.5`，使中间列占据 1.5 份空间，左右各 1 份。
+
+**影响位置**：
+
+- `game.tscn` 第 740–778 行：`RulePanel`、`MustReadPanel`、`OpPanel` 的 `size_flags_stretch_ratio` 设置。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认中间【必看】列明显比左右两列宽。
+
+
+## 2026-07-25 12:06
+
+**原因**：用户反馈中间【必看】列未实现 1.5 倍宽度，三栏仍一样宽。原因是 `WelcomePanel` 自身未在父级 VBoxContainer 中水平展开，导致子面板按最小宽度排列。
+
+**改动**：
+
+1. **`game.tscn`**（修复展开）：
+   - 为 `WelcomePanel` 添加 `size_flags_horizontal = 3`，使其在 VBoxContainer 中水平填充，子面板的比例拉伸才能生效。
+
+**影响位置**：
+
+- `game.tscn` 第 733–739 行：`WelcomePanel` 增加 `size_flags_horizontal = 3`。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认中间【必看】列宽度为左右两列的 1.5 倍。
+
+
+## 2026-07-25 12:07
+
+**原因**：`size_flags_stretch_ratio` 在 HBoxContainer 中未按预期生效，三栏仍等宽。改为通过固定最小宽度精确控制比例，并将中间列目标比例调整为 1.8 倍。
+
+**改动**：
+
+1. **`game.tscn`**（固定宽度实现 1.8 倍比例）：
+   - 移除三个 PanelContainer 的 `size_flags_stretch_ratio` 与 `size_flags_horizontal = 3`。
+   - 改设 `size_flags_horizontal = 0`，让 HBoxContainer 按子节点最小宽度排列。
+   - 为三个 PanelContainer 设置显式 `custom_minimum_size`：
+	 - `RulePanel`：`Vector2(280, 0)`
+	 - `MustReadPanel`：`Vector2(504, 0)`（280 × 1.8）
+	 - `OpPanel`：`Vector2(280, 0)`
+   - `WelcomePanel` 保持 `alignment = 1`，三栏在可用宽度内居中。
+
+**影响位置**：
+
+- `game.tscn` 第 740–778 行：`RulePanel`、`MustReadPanel`、`OpPanel` 的宽度与展开标志调整。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认中间【必看】列宽度约为左右两列的 1.8 倍。
+
+
+## 2026-07-25 12:08
+
+**原因**：用户要求回退、前进、重开三个功能仅在休闲模式可见和可用，竞技模式下隐藏。
+
+**改动**：
+
+1. **`game.gd`**（功能可见性与可用性控制）：
+   - 新增 `@onready var restart_button_2: Button = %RestartButton2`，以便同时控制暂停菜单中的重开按钮。
+   - `_update_ui()` 中根据当前模式设置 `undo_button`、`redo_button`、`restart_button`、`restart_button_2` 的 `visible`：竞技模式隐藏，休闲模式显示。
+   - `_on_undo_button_pressed()`、`_on_redo_button_pressed()`、`_on_restart_button_pressed()` 增加竞技模式早期返回，作为防护性校验。
+
+**影响位置**：
+
+- `game.gd` 第 133–134 行：新增 `restart_button_2` 引用。
+- `game.gd` 第 1593、1626、1718 行：三个功能函数增加竞技模式判断。
+- `game.gd` 第 1724–1733 行：`_update_ui()` 控制按钮可见性。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中切换到竞技模式，确认工具栏「回退」「前进」「重开」按钮以及暂停菜单「重开」按钮消失；切回休闲模式后恢复显示。
+
+
+## 2026-07-25 12:09
+
+**原因**：用户要求调整欢迎弹窗【必看】文案中操作说明的顺序与措辞。
+
+**改动**：
+
+1. **`game.gd`**（【必看】文案）：
+   - `_show_welcome_dialog()` 中 `must_read_text` 的正文由"鼠标右键提示，双击暂停。"改为"鼠标双击暂停，右键单击提示。"。
+
+**影响位置**：
+
+- `game.gd` 第 565 行：`must_read_text` 拼接内容。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行，确认欢迎弹窗中间【必看】列文案已更新。
+
+
+## 2026-07-25 12:10
+
+**原因**：用户反馈格子坍塌移动时，内部图案会出现变大/变小，希望移动过程中图案保持普通大小不变。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（幽灵图标保持源缩放）：
+   - `_create_ghost_from_cell()` 中，将幽灵 TextureRect 的 `scale` 与 `pivot_offset` 从源格子的图标复制过来，而不是固定设为 `Vector2.ONE`。
+   - 这样坍塌动画的幽灵在滑动过程中会与源格子图标保持完全一致的视觉大小与缩放中心，避免移动时图案突然变大或变小。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 514–525 行：`_create_ghost_from_cell()` 的图标属性复制逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中进入会触发坍塌的关卡（如第 2 关及以后），消除后确认滑动中的幽灵图案大小与静止时一致。
+
+
+## 2026-07-25 12:11
+
+**原因**：用户反馈格子坍塌移动时图案仍会先变大再变小。进一步排查发现源格子的选中缩放补间可能仍在运行，且幽灵图标位置以 Cell 左上角为基准会重复计算 PanelContainer 样式边距。
+
+**改动**：
+
+1. **`cell.gd`**（新增重置方法）：
+   - 新增 `reset_icon_scale_to_base()`，用于杀死选中缩放补间并将图标立即恢复为基准缩放。
+
+2. **`managers/board_manager.gd`**（修复幽灵大小与位置）：
+   - `_animate_collapse()` 中隐藏源格子前，先调用 `cell.reset_icon_scale_to_base()`，确保幽灵复制到的是普通大小。
+   - `_create_ghost_from_cell()` 中，幽灵图标位置改以 `MarginContainer` 左上角为基准计算（回退到 Cell 左上角），避免 PanelContainer 样式边距造成的位置/视觉大小偏差。
+
+**影响位置**：
+
+- `cell.gd` 第 252–261 行：新增 `reset_icon_scale_to_base()`。
+- `managers/board_manager.gd` 第 564–567 行：坍塌前重置源格子图标缩放。
+- `managers/board_manager.gd` 第 514–531 行：幽灵图标位置计算逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中触发坍塌，确认滑动中的幽灵图案大小稳定、无缩放跳动。
+
+
+## 2026-07-25 12:12
+
+**原因**：用户要求彻底重写坍塌移动动画逻辑：移动过程中图案大小绝对不变、朴素平移、无闪烁、无额外动作、动画迅速。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（重写幽灵与坍塌动画）：
+   - `_create_ghost_from_cell()` 返回类型改为 `Control`，内部使用一个 `PanelContainer` 仅作背景（不存放子节点），图标作为 `Control` 的同级子节点。
+   - 图标尺寸按当前图版基准缩放直接计算为视觉大小（`source_icon.size * base_scale`），`scale` 固定为 `Vector2.ONE`，移动期间绝不变化。
+   - 图标位置按格子中心对齐，避免 MarginContainer / PanelContainer 边距造成的偏移。
+   - `_animate_collapse()` 动画曲线从 `TRANS_QUINT` 改为 `TRANS_LINEAR`，实现朴素、迅速的平移。
+   - 注释同步更新，明确“朴素平移、图案大小始终不变”的意图。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 501–533 行：`_create_ghost_from_cell()` 完全重写。
+- `managers/board_manager.gd` 第 536–604 行：`_animate_collapse()` 动画曲线与注释调整。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中触发坍塌，确认移动中的格子图案大小稳定、无缩放跳动、无闪烁，动画快速直接。
+
+
+## 2026-07-25 12:13
+
+**原因**：用户明确要求：未被消除且即将被迫移动的格子不要隐藏，直接移动过去；动画要朴素、迅速、无闪烁、无额外动作。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（移除幽灵，直接移动真实格子）：
+   - 完全删除 `_create_ghost_from_cell()` 与幽灵层相关逻辑。
+   - `_animate_collapse()` 改为：
+	 - 收集所有需要移动的源格子（Cell 实例）。
+	 - 将这些格子设为 `top_level = true`，使其脱离 GridContainer 的重新布局控制。
+	 - 直接对这些真实格子使用线性补间，从当前全局位置平移到目标全局位置。
+	 - 移动期间不隐藏、不缩放、无额外动作。
+	 - 动画结束后先调用 `update_all_cells()` 同步棋盘，再关闭 `top_level`，让格子无缝落位到新布局。
+   - `apply_collapse()` 的默认动画时长从 `0.22` 秒缩短为 `0.15` 秒，使动画更迅速。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 419 行：`apply_collapse()` 默认 duration 改为 0.15。
+- `managers/board_manager.gd` 第 501–552 行：删除 `_create_ghost_from_cell()`，重写 `_animate_collapse()`。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中触发坍塌，确认移动的是真实格子、全程可见、大小不变、动画快速直接。
+
+
+## 2026-07-25 12:14
+
+**原因**：直接移动真实格子的方案因 GridContainer 布局机制导致落位错误（格子回到原索引位置而非目标位置）。改回幽灵方案，但确保幽灵与真实格子视觉完全一致、移动位置正确、动画迅速朴素。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**（恢复幽灵移动）：
+   - 恢复 `_create_ghost_from_cell()`，幽灵为 `Control`，内含独立背景 `PanelContainer` 和居中图标 `TextureRect`。
+   - 图标尺寸按基准缩放计算视觉大小，`scale = Vector2.ONE`，移动期间大小不变。
+   - 恢复 `_animate_collapse()`：源格子与目标格子先隐藏，由幽灵从源位置平移到目标位置。
+   - 动画使用 `TRANS_LINEAR`，默认时长保持 `0.15` 秒（迅速）。
+   - 动画结束后立即清理幽灵并恢复实际格子可见，避免闪烁。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 501–567 行：`_create_ghost_from_cell()` 与 `_animate_collapse()` 逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中触发坍塌，确认幽灵从正确源位置移动到正确目标位置，图案大小稳定，动画快速无闪烁。

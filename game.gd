@@ -88,7 +88,7 @@ var _level4_direction: Level4Dir = Level4Dir.UP
 var current_difficulty: int = 1
 
 # 游戏模式与竞技模式剩余次数（休闲模式不消耗次数）
-var current_mode: GameMode = GameMode.CASUAL
+var current_mode: GameMode = GameMode.COMPETITIVE
 var hints_remaining: int = 0
 var shuffles_remaining: int = 0
 
@@ -105,6 +105,9 @@ const SETTINGS_FILE := "user://settings.json"
 
 # 关卡完成弹窗待进入的下一关
 var _pending_next_level: int = -1
+
+# 菜单栏相关的弹出菜单列表，用于判断鼠标是否在菜单交互区域
+var _popup_menus: Array[PopupMenu] = []
 
 # 音量与开关（游戏主控保存真实值，AudioManager 执行）
 var sound_effects_enabled: bool = true
@@ -128,6 +131,7 @@ var bgm_volume: float = 0.5
 @onready var redo_button: Button = %RedoButton
 @onready var pause_button: Button = %PauseButton
 @onready var restart_button: Button = %RestartButton
+@onready var restart_button_2: Button = %RestartButton2
 @onready var hint_button: Button = %HintButton
 @onready var shuffle_button: Button = %ShuffleButton
 @onready var time_label: RichTextLabel = %TimeLabel
@@ -184,6 +188,10 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var dialog_content: RichTextLabel = %DialogContent
 @onready var dialog_hint: Label = %DialogHint
 @onready var dialog_name_input: LineEdit = %DialogNameInput
+@onready var welcome_panel: HBoxContainer = %WelcomePanel
+@onready var welcome_rule_label: RichTextLabel = %WelcomeRuleLabel
+@onready var welcome_must_read_label: RichTextLabel = %WelcomeMustReadLabel
+@onready var welcome_op_label: RichTextLabel = %WelcomeOpLabel
 
 @onready var leaderboard_panel: VBoxContainer = %LeaderboardPanel
 @onready var leaderboard_content: RichTextLabel = %LeaderboardContent
@@ -553,18 +561,27 @@ func _get_max_level_for_difficulty(difficulty: int) -> int:
 
 # 显示欢迎弹窗
 func _show_welcome_dialog() -> void:
-	var content := "[center]"
-	content += "[color=#E0B45A][b]【游戏规则】[/b][/color]\n"
-	content += "点击两个 [color=#E08787]相同图案[/color] 的格子，\n"
-	content += "若能用不超过 [color=#66ff66][b]2 个转弯[/b][/color] 的直线连接，则消除。\n"
-	content += "消除所有图案即可获胜。\n\n"
-	content += "[color=#E0B45A][b]【操作说明】[/b][/color]\n"
-	content += "[color=#5AB4E0][b]T / 鼠标右键[/b][/color]：提示\n"
-	content += "[color=#5AB4E0][b]X / 左右键同时按[/b][/color]：洗牌\n"
-	content += "[color=#5AB4E0][b]空格键 / 鼠标左键快速双击[/b][/color]：暂停 / 继续\n"
-	content += "[color=#5AB4E0][b]鼠标左键[/b][/color]：选择 / 消除"
-	content += "[/center]"
-	_show_custom_dialog(DialogType.WELCOME, "欢迎游玩连连看", content, "点击任意位置或按任意键开始")
+	var rule_text := "[center][color=#E0B45A][font_size=28][b]【游戏规则】[/b][/font_size][/color]\n\n"
+	rule_text += "[color=#FFF8F0][font_size=22]点击两个 [color=#E08787]相同图案[/color] 的格子，\n"
+	rule_text += "若能用不超过 [color=#66ff66][b]2 个转弯[/b][/color] 的直线连接，则消除。\n"
+	rule_text += "消除所有图案即可获胜。[/font_size][/color][/center]"
+
+	var must_read_text := "[center][color=#8B0000][font_size=30]【必看】[/font_size][/color]\n\n"
+	must_read_text += "[color=#660000][font_size=22]本游戏分竞技模式与休闲模式；[/font_size][/color]\n"
+	must_read_text += "[color=#8B0000][font_size=24]鼠标双击暂停，右键单击提示。[/font_size][/color][/center]"
+
+	var op_text := "[center][color=#E0B45A][font_size=28][b]【操作说明】[/b][/font_size][/color]\n\n"
+	op_text += "[color=#FFF8F0][font_size=22][color=#5AB4E0][b]T / 鼠标右键[/b][/color]：提示\n"
+	op_text += "[color=#5AB4E0][b]X / 左右键同时按[/b][/color]：洗牌\n"
+	op_text += "[color=#5AB4E0][b]空格键 / 双击[/b][/color]：暂停 / 继续\n"
+	op_text += "[color=#5AB4E0][b]鼠标左键[/b][/color]：选择 / 消除[/font_size][/color][/center]"
+
+	welcome_rule_label.text = rule_text
+	welcome_must_read_label.text = must_read_text
+	welcome_op_label.text = op_text
+	_show_custom_dialog(DialogType.WELCOME, "欢迎游玩连连看", "", "点击任意位置或按任意键开始")
+	welcome_panel.show()
+	dialog_content.hide()
 	_flash_dialog_hint()
 
 
@@ -818,6 +835,37 @@ func _setup_menus() -> void:
 	skin_popup.index_pressed.connect(_on_skin_menu_item_pressed)
 	_update_skin_menu_check()
 
+	# 记录所有弹出菜单，供顶部 UI 自动隐藏时判断是否在菜单交互区域
+	_popup_menus.assign([
+		game_popup,
+		mode_popup,
+		level_popup,
+		options_popup,
+		master_volume_popup,
+		sfx_volume_popup,
+		bgm_volume_popup,
+		help_popup,
+		skin_popup,
+	])
+
+
+# 判断鼠标是否位于菜单栏或任意已打开的弹出菜单上（含下拉项）
+func _is_mouse_over_menu() -> bool:
+	var mouse_pos := get_global_mouse_position()
+
+	# 菜单栏区域
+	if menu_bar.get_global_rect().has_point(mouse_pos):
+		return true
+
+	# 任意弹出菜单可见时保持完整 UI（Godot 4 中 PopupMenu 继承 Window，无 get_global_rect）
+	for popup in _popup_menus:
+		if popup == null:
+			continue
+		if popup.visible:
+			return true
+
+	return false
+
 
 # 处理游戏菜单：切换难度并重新开始
 func _on_game_menu_item_pressed(index: int) -> void:
@@ -973,6 +1021,14 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 		dialog_content.hide()
 		dialog_hint.hide()
 		leaderboard_panel.show()
+		welcome_panel.hide()
+	elif type == DialogType.WELCOME:
+		dialog_content.hide()
+		dialog_hint.show()
+		dialog_hint.text = hint
+		dialog_hint.modulate = Color.WHITE
+		leaderboard_panel.hide()
+		welcome_panel.show()
 	else:
 		dialog_content.show()
 		dialog_content.text = content
@@ -980,6 +1036,7 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 		dialog_hint.text = hint
 		dialog_hint.modulate = Color.WHITE
 		leaderboard_panel.hide()
+		welcome_panel.hide()
 
 	custom_dialog.show()
 	_set_paused(true, false)
@@ -997,6 +1054,7 @@ func _flash_dialog_hint() -> void:
 func _hide_custom_dialog() -> void:
 	custom_dialog.hide()
 	leaderboard_panel.hide()
+	welcome_panel.hide()
 	_set_paused(false)
 	match _current_dialog_type:
 		DialogType.LEVEL_COMPLETE:
@@ -1124,7 +1182,7 @@ func _update_ui_visibility(delta: float) -> void:
 		return
 
 	var mouse_y := get_global_mouse_position().y
-	if mouse_y <= TOP_TRIGGER_HEIGHT:
+	if mouse_y <= TOP_TRIGGER_HEIGHT or _is_mouse_over_menu():
 		_top_leave_time = 0.0
 		if _ui_hidden:
 			_show_full_ui()
@@ -1191,11 +1249,11 @@ func _update_compact_ui() -> void:
 	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score_manager.score
 
 
-# 游戏开始 5 秒后尝试切换到紧凑 UI；若鼠标正在屏幕顶部则保持完整 UI
+# 游戏开始 5 秒后尝试切换到紧凑 UI；若鼠标正在屏幕顶部或菜单区域则保持完整 UI
 func _on_ui_hide_timer_timeout() -> void:
 	if game_state != GameState.PLAYING or _is_paused:
 		return
-	if get_global_mouse_position().y <= TOP_TRIGGER_HEIGHT:
+	if get_global_mouse_position().y <= TOP_TRIGGER_HEIGHT or _is_mouse_over_menu():
 		return
 	_show_compact_ui()
 
@@ -1218,6 +1276,7 @@ func restart_game(reset_progress: bool = true) -> void:
 	game_state = GameState.PLAYING
 	game_over_panel.hide()
 	custom_dialog.hide()
+	welcome_panel.hide()
 	selected_index = -1
 	_timer_running = true
 	move_history.clear()
@@ -1476,6 +1535,9 @@ func _on_cell_clicked(index: int) -> void:
 	if tween2 != null:
 		await tween2.finished
 
+	# 动画结束后立即把两个格子设为空白，彻底移除残影并同步状态
+	cell1.tile_type = 0
+	cell2.tile_type = 0
 	match_line.points = PackedVector2Array()
 
 	# 动画结束后才真正消除并计分
@@ -1486,7 +1548,10 @@ func _on_cell_clicked(index: int) -> void:
 	var popup_pos: Vector2 = cell2.global_position + cell2.size / 2.0
 	_show_score_feedback(score_manager.get_last_points(), popup_pos)
 
-	board_manager.apply_collapse(current_level, _level2_direction, _level4_direction)
+	var collapse_tween := board_manager.apply_collapse(current_level, _level2_direction, _level4_direction)
+	if collapse_tween != null:
+		await collapse_tween.finished
+
 	board_manager.update_all_cells(selected_index)
 	_update_ui()
 	_is_animating = false
@@ -1526,7 +1591,7 @@ func _eliminate(r1: int, c1: int, r2: int, c2: int) -> float:
 
 # 模块：撤销 / 重做 —— 撤销上一步消除
 func _on_undo_button_pressed() -> void:
-	if move_history.is_empty() or _is_paused or _is_animating:
+	if current_mode == GameMode.COMPETITIVE or move_history.is_empty() or _is_paused or _is_animating:
 		return
 
 	var last: Dictionary = move_history.pop_back()
@@ -1549,6 +1614,7 @@ func _on_undo_button_pressed() -> void:
 	game_over_panel.hide()
 	_pending_next_level = -1
 	custom_dialog.hide()
+	welcome_panel.hide()
 	board_manager.update_all_cells(selected_index)
 	_update_ui()
 	_update_level_info()
@@ -1558,7 +1624,7 @@ func _on_undo_button_pressed() -> void:
 
 # 模块：撤销 / 重做 —— 重做一步被撤销的消除
 func _on_redo_button_pressed() -> void:
-	if undo_history.is_empty() or _is_paused or _is_animating:
+	if current_mode == GameMode.COMPETITIVE or undo_history.is_empty() or _is_paused or _is_animating:
 		return
 
 	var redo: Dictionary = undo_history.pop_back()
@@ -1650,17 +1716,24 @@ func _on_shuffle_button_pressed() -> void:
 
 # 重新开始本局（保留总分与总用时）
 func _on_restart_button_pressed() -> void:
-	if _is_animating:
+	if current_mode == GameMode.COMPETITIVE or _is_animating:
 		return
 	restart_game(false)
 
 
 # 刷新按钮可用状态
 func _update_ui() -> void:
+	var is_casual := current_mode == GameMode.CASUAL
+	# 回退、前进、重开仅在休闲模式可见与可用
+	undo_button.visible = is_casual
+	redo_button.visible = is_casual
+	restart_button.visible = is_casual
+	restart_button_2.visible = is_casual
+
 	undo_button.disabled = move_history.is_empty()
 	redo_button.disabled = undo_history.is_empty()
-	var can_hint := current_mode == GameMode.CASUAL or hints_remaining > 0
-	var can_shuffle := current_mode == GameMode.CASUAL or shuffles_remaining > 0
+	var can_hint := is_casual or hints_remaining > 0
+	var can_shuffle := is_casual or shuffles_remaining > 0
 	hint_button.disabled = not can_hint
 	shuffle_button.disabled = not can_shuffle
 	_update_mode_label()

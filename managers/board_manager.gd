@@ -414,8 +414,13 @@ func find_hint_pair() -> Array[Vector2i]:
 	return []
 
 
-# 根据关卡规则应用坍塌（方向以 int 传入，避免不同脚本枚举类型冲突）
-func apply_collapse(level: int, level2_dir: int, level4_dir: int) -> void:
+# 根据关卡规则应用坍塌（方向以 int 传入，避免不同脚本枚举类型冲突）。
+# 返回用于播放坍塌动画的 Tween；若无需动画则返回 null。
+func apply_collapse(level: int, level2_dir: int, level4_dir: int, duration: float = 0.15) -> Tween:
+	if level <= 1:
+		return null
+
+	var old_board := board.duplicate(true)
 	match level:
 		2:
 			match level2_dir:
@@ -443,6 +448,156 @@ func apply_collapse(level: int, level2_dir: int, level4_dir: int) -> void:
 			_collapse_vertical_converge()
 		10:
 			_collapse_quadrant_spread()
+
+	return _animate_collapse(old_board, duration)
+
+
+# 对比坍塌前后的棋盘，按图案值匹配旧位置与新位置，生成移动列表
+func _build_movement_map(old_board: Array, new_board: Array) -> Array[Dictionary]:
+	var movements: Array[Dictionary] = []
+	var old_positions_by_type: Dictionary[int, Array] = {}
+	var new_positions_by_type: Dictionary[int, Array] = {}
+
+	for r in range(get_rows()):
+		for c in range(get_cols()):
+			var old_type: int = old_board[r][c]
+			if old_type != 0:
+				if not old_positions_by_type.has(old_type):
+					old_positions_by_type[old_type] = []
+				old_positions_by_type[old_type].append(Vector2i(r, c))
+
+			var new_type: int = new_board[r][c]
+			if new_type != 0:
+				if not new_positions_by_type.has(new_type):
+					new_positions_by_type[new_type] = []
+				new_positions_by_type[new_type].append(Vector2i(r, c))
+
+	for type: int in old_positions_by_type.keys():
+		var old_positions: Array = old_positions_by_type[type]
+		var new_positions: Array = new_positions_by_type.get(type, [])
+		# 坍塌不改变非空图案总数，因此 old/new 数量应相同
+		var count := mini(old_positions.size(), new_positions.size())
+		for i in range(count):
+			var old_pos: Vector2i = old_positions[i]
+			var new_pos: Vector2i = new_positions[i]
+			if old_pos != new_pos:
+				movements.append({
+					"old_pos": old_pos,
+					"new_pos": new_pos,
+					"tile_type": type,
+				})
+
+	return movements
+
+
+# 获取指定棋盘格子的全局位置
+func _get_cell_global_position(r: int, c: int) -> Vector2:
+	var idx := pos_to_index(r, c)
+	if idx < 0 or idx >= _grid_container.get_child_count():
+		return Vector2.ZERO
+	return _grid_container.get_child(idx).global_position
+
+
+# 根据源格子创建一个轻量“幽灵”：底色与图标均保持原样，图标使用普通视觉大小、scale 为 1.0
+func _create_ghost_from_cell(source_cell: Cell) -> Control:
+	var ghost := Control.new()
+	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ghost.size = source_cell.size
+
+	# 复制源格子的面板样式作为底色（不存放子节点，避免边距影响位置）
+	var bg := PanelContainer.new()
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.size = source_cell.size
+	var stylebox := source_cell.get_theme_stylebox("panel")
+	if stylebox != null:
+		bg.add_theme_stylebox_override("panel", stylebox)
+	ghost.add_child(bg)
+
+	# 创建图标，使用普通情况下的视觉大小，scale 固定为 1.0，移动过程中绝不变化
+	var source_icon: TextureRect = source_cell.get_node_or_null("MarginContainer/TextureRect")
+	if source_icon != null and source_icon.texture != null:
+		var icon := TextureRect.new()
+		icon.texture = source_icon.texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var base_scale := Cell.POKEMON_ICON_SCALE if Cell.current_skin == Cell.TileSkin.POKEMON else Vector2.ONE
+		var icon_size := source_icon.size * base_scale
+		icon.size = icon_size
+		icon.position = (source_cell.size - icon_size) / 2.0
+		icon.scale = Vector2.ONE
+		icon.modulate = Color.WHITE
+		ghost.add_child(icon)
+
+	return ghost
+
+
+# 执行坍塌位移动画：源格子和目标格子暂时隐藏，由幽灵代替平移，图案大小始终不变
+func _animate_collapse(old_board: Array, duration: float) -> Tween:
+	var movements := _build_movement_map(old_board, board)
+	if movements.is_empty():
+		return null
+
+	var source_indices: Array[int] = []
+	var destination_indices: Array[int] = []
+	for movement in movements:
+		var old_idx := pos_to_index(movement.old_pos.x, movement.old_pos.y)
+		var new_idx := pos_to_index(movement.new_pos.x, movement.new_pos.y)
+		if not source_indices.has(old_idx):
+			source_indices.append(old_idx)
+		if not destination_indices.has(new_idx):
+			destination_indices.append(new_idx)
+
+	var affected_indices: Array[int] = []
+	for idx in source_indices:
+		if not affected_indices.has(idx):
+			affected_indices.append(idx)
+	for idx in destination_indices:
+		if not affected_indices.has(idx):
+			affected_indices.append(idx)
+
+	# 立即把实际棋盘更新到坍塌后的状态：目标位置写入新图案并隐藏，源格子也隐藏，由幽灵完成移动动画
+	for idx in destination_indices:
+		var cell: Cell = _grid_container.get_child(idx)
+		var pos := index_to_pos(idx)
+		cell.tile_type = board[pos.x][pos.y]
+		cell.modulate.a = 0.0
+
+	for idx in source_indices:
+		var cell: Cell = _grid_container.get_child(idx)
+		cell.reset_icon_scale_to_base()
+		cell.modulate.a = 0.0
+
+	# 创建幽灵层，使用 top_level 避免受 GridContainer 重新布局影响
+	var ghost_parent := Control.new()
+	ghost_parent.name = "CollapseGhosts"
+	ghost_parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ghost_parent.top_level = true
+	_grid_container.add_child(ghost_parent)
+
+	# 线性、迅速地平移到目标位置
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_LINEAR)
+	tween.set_ease(Tween.EASE_IN_OUT)
+
+	for movement in movements:
+		var source_idx := pos_to_index(movement.old_pos.x, movement.old_pos.y)
+		var source_cell: Cell = _grid_container.get_child(source_idx)
+		var ghost := _create_ghost_from_cell(source_cell)
+		ghost.global_position = source_cell.global_position
+		ghost_parent.add_child(ghost)
+		var target_pos := _get_cell_global_position(movement.new_pos.x, movement.new_pos.y)
+		tween.tween_property(ghost, "global_position", target_pos, duration)
+
+	# 动画结束后立即清理幽灵并恢复实际格子可见，避免闪烁
+	tween.finished.connect(func() -> void:
+		ghost_parent.queue_free()
+		for idx in affected_indices:
+			var cell: Cell = _grid_container.get_child(idx)
+			cell.modulate.a = 1.0
+	)
+
+	return tween
 
 
 # 手动重排剩余图案，确保洗牌后仍有足够可消除对

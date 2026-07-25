@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://clervudyy6xv"]
+[gd_scene load_steps=14 format=3 uid="uid://clervudyy6xv"]
 
 [ext_resource type="Script" uid="uid://yey3gxhknoih" path="res://game.gd" id="1_feb5d"]
 [ext_resource type="PackedScene" uid="uid://bm62ipt0ofqm7" path="res://cell.tscn" id="2_e2o6t"]
@@ -24,6 +24,20 @@ texture = SubResource("GradientTexture2D_timer")
 font = ExtResource("4_2epjp")
 font_size = 140
 font_color = Color(0.88, 0.48, 0.51, 0.9)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_welcome_side"]
+bg_color = Color(0.164706, 0.227451, 0.290196, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_welcome_center"]
+bg_color = Color(1, 0.8, 0.8, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -715,6 +729,68 @@ text = "内容"
 fit_content = true
 scroll_active = false
 horizontal_alignment = 1
+
+[node name="WelcomePanel" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="RulePanel" type="PanelContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/WelcomePanel"]
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_welcome_side")
+
+[node name="WelcomeRuleLabel" type="RichTextLabel" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/WelcomePanel/RulePanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 24
+theme_override_font_sizes/bold_font_size = 28
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MustReadPanel" type="PanelContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/WelcomePanel"]
+custom_minimum_size = Vector2(504, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_welcome_center")
+
+[node name="WelcomeMustReadLabel" type="RichTextLabel" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/WelcomePanel/MustReadPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 24
+theme_override_font_sizes/bold_font_size = 28
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="OpPanel" type="PanelContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/WelcomePanel"]
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_welcome_side")
+
+[node name="WelcomeOpLabel" type="RichTextLabel" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/WelcomePanel/OpPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 24
+theme_override_font_sizes/bold_font_size = 28
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="DialogNameInput" type="LineEdit" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
