@@ -164,6 +164,7 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var compact_combo_label: RichTextLabel = %CompactComboLabel
 @onready var game_over_label: Label = %GameOverLabel
 @onready var game_over_panel: PanelContainer = %GameOverPanel
+@onready var auto_shuffle_hint: Label = %AutoShuffleHint
 @onready var pause_label: Label = %PauseLabel
 @onready var pause_dim: ColorRect = %PauseDim
 @onready var pause_menu_panel: PanelContainer = %PauseMenuPanel
@@ -1564,8 +1565,7 @@ func _on_cell_clicked(index: int) -> void:
 	if board_manager.pairs_left == 0:
 		_on_level_complete()
 	elif not board_manager.has_any_match():
-		board_manager.shuffle_remaining()
-		board_manager.update_all_cells(selected_index)
+		await _auto_shuffle_with_feedback()
 
 
 # 消除两个格子，并奖励额外时间；返回距离上次消除的秒数
@@ -1652,8 +1652,7 @@ func _on_redo_button_pressed() -> void:
 	if board_manager.pairs_left == 0:
 		_on_level_complete()
 	elif not board_manager.has_any_match():
-		board_manager.shuffle_remaining()
-		board_manager.update_all_cells(selected_index)
+		await _auto_shuffle_with_feedback()
 
 
 # 模块：提示与洗牌 —— 高亮一对可连通的图案并画线
@@ -1712,6 +1711,62 @@ func _on_shuffle_button_pressed() -> void:
 	selected_index = -1
 	board_manager.update_all_cells(selected_index)
 	_update_ui()
+
+
+# 死局自动洗牌：带文字提示与缩放动画，避免玩家察觉不到
+func _auto_shuffle_with_feedback() -> void:
+	_is_animating = true
+	var was_timer_running := _timer_running
+	_timer_running = false
+	auto_shuffle_hint.show()
+
+	# 短暂停留让玩家读到提示
+	await get_tree().create_timer(0.5).timeout
+
+	var cells: Array[Cell] = []
+	for i in range(board_manager.get_rows() * board_manager.get_cols()):
+		var cell: Cell = grid_container.get_child(i)
+		if cell.tile_type != 0:
+			cells.append(cell)
+			cell.pivot_offset = cell.size / 2.0
+
+	# 缩放淡出，同时播放洗牌音效
+	var fade_out := create_tween()
+	fade_out.set_parallel(true)
+	fade_out.set_trans(Tween.TRANS_LINEAR)
+	audio_manager.play_sound(AudioManager.SHUFFLE_SOUND)
+	for cell in cells:
+		fade_out.tween_property(cell, "scale", Vector2(0.7, 0.7), 0.1)
+		fade_out.tween_property(cell, "modulate:a", 0.3, 0.1)
+	await fade_out.finished
+
+	# 执行洗牌并刷新棋盘
+	board_manager.shuffle_remaining()
+	selected_index = -1
+	board_manager.update_all_cells(selected_index)
+
+	# 重新收集洗牌后的非空格子，设置为缩放淡入初始状态
+	cells.clear()
+	for i in range(board_manager.get_rows() * board_manager.get_cols()):
+		var cell: Cell = grid_container.get_child(i)
+		if cell.tile_type != 0:
+			cells.append(cell)
+			cell.pivot_offset = cell.size / 2.0
+			cell.scale = Vector2(0.7, 0.7)
+			cell.modulate.a = 0.3
+
+	# 缩放淡入
+	var fade_in := create_tween()
+	fade_in.set_parallel(true)
+	fade_in.set_trans(Tween.TRANS_LINEAR)
+	for cell in cells:
+		fade_in.tween_property(cell, "scale", Vector2.ONE, 0.15)
+		fade_in.tween_property(cell, "modulate:a", 1.0, 0.15)
+	await fade_in.finished
+
+	auto_shuffle_hint.hide()
+	_is_animating = false
+	_timer_running = was_timer_running
 
 
 # 重新开始本局（保留总分与总用时）

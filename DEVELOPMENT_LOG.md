@@ -2624,3 +2624,41 @@ cd assets/连连看例子
 
 - 命令行 `--headless --quit` 加载无脚本错误。
 - 建议在编辑器中触发坍塌，确认幽灵从正确源位置移动到正确目标位置，图案大小稳定，动画快速无闪烁。
+
+
+## 2026-07-25 12:15
+
+**原因**：用户反馈死局自动洗牌过于隐蔽，玩家无法察觉。选择方案：文字提示 + 洗牌动画 + 音效。
+
+**改动**：
+
+1. **`managers/audio_manager.gd`**：
+   - 新增常量 `SHUFFLE_SOUND`，预加载 `res://assets/sound/shuffling洗牌.mp3`。
+
+2. **`game.tscn`**：
+   - 在 `CanvasLayer` 下新增 `AutoShuffleHint` Label，居中显示，带黑色描边，默认隐藏。
+
+3. **`game.gd`**：
+   - 新增 `@onready var auto_shuffle_hint: Label = %AutoShuffleHint`。
+   - 新增异步函数 `_auto_shuffle_with_feedback()`：
+	 - 显示提示文字“没有可消除对，自动洗牌...”。
+	 - 暂停倒计时（避免玩家在反馈动画期间损失时间）。
+	 - 停留 0.5 秒让玩家阅读。
+	 - 所有非空格子以中心为 pivot 缩放至 0.7 并透明度降至 0.3，同时播放洗牌音效。
+	 - 执行 `board_manager.shuffle_remaining()` 并刷新棋盘。
+	 - 洗牌后的非空格子从 0.7/0.3 缩放回正常大小并淡入。
+	 - 隐藏提示文字，恢复倒计时与动画标志。
+   - 将 `_on_cell_clicked()` 与 `_on_redo_button_pressed()` 中的静默自动洗牌改为 `await _auto_shuffle_with_feedback()`。
+
+**影响位置**：
+
+- `managers/audio_manager.gd` 第 7 行：新增 `SHUFFLE_SOUND`。
+- `game.tscn` 第 886–904 行：新增 `AutoShuffleHint` 节点。
+- `game.gd` 第 166 行：新增 `@onready` 引用。
+- `game.gd` 第 1718–1778 行：新增 `_auto_shuffle_with_feedback()`。
+- `game.gd` 第 1566、1654 行：自动洗牌调用点改为 `await _auto_shuffle_with_feedback()`。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中制造死局（或等待自然出现），确认屏幕中央出现提示文字，格子缩放淡出/洗牌音效/淡入，动画结束后恢复游戏。

@@ -883,6 +883,27 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 32
 text = "关闭"
 
+[node name="AutoShuffleHint" type="Label" parent="CanvasLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -40.0
+offset_right = 300.0
+offset_bottom = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 40
+text = "没有可消除对，自动洗牌..."
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="HintLine" type="Line2D" parent="CanvasLayer"]
 unique_name_in_owner = true
 width = 4.0

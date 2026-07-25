@@ -4,6 +4,7 @@ class_name AudioManager
 # 音频管理器：负责音效播放、背景音乐与音量控制。
 
 const CLICK_SOUND := preload("res://assets/sound/普通点击miao.mp3")
+const SHUFFLE_SOUND := preload("res://assets/sound/shuffling洗牌.mp3")
 const SUCCESS_SOUND := preload("res://assets/sound/连接正确small-victory.mp3")
 const SUCCESS_SLOW_SOUND := preload("res://assets/sound/连接正确但10秒间隔以上.mp3")
 const ERROR_SOUND := preload("res://assets/sound/error.mp3")
