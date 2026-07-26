@@ -136,6 +136,7 @@ var bgm_volume: float = 0.5
 @onready var remaining_pairs_label: RichTextLabel = %RemainingPairsLabel
 @onready var timer_bar: ProgressBar = %TimerBar
 @onready var compact_timer_bar: ProgressBar = %CompactTimerBar
+@onready var _timer_gradient: Gradient = %TimerBar.get_theme_stylebox("fill").texture.gradient
 @onready var compact_time_label: RichTextLabel = %CompactTimeLabel
 @onready var compact_score_label: RichTextLabel = %CompactScoreLabel
 @onready var menu_bar: PanelContainer = %MenuBar
@@ -1298,12 +1299,33 @@ func restart_game(reset_progress: bool = true) -> void:
 	print("game started!")
 
 
-# 同步倒计时进度条的最大值与当前值，最后 10 秒触发脉冲闪烁
+# 同步倒计时进度条的最大值与当前值，并按剩余比例切换红/橙/绿渐变，最后 10 秒触发脉冲闪烁
 func _update_timer_bar() -> void:
 	timer_bar.max_value = ScoreManager.MAX_TIME
 	timer_bar.value = score_manager.remaining_time
 	compact_timer_bar.max_value = ScoreManager.MAX_TIME
 	compact_timer_bar.value = score_manager.remaining_time
+
+	# 根据剩余时间比例切换进度条渐变颜色
+	var ratio := score_manager.remaining_time / ScoreManager.MAX_TIME
+	if ratio < 0.3:
+		_timer_gradient.colors = PackedColorArray([
+			Color(0.88, 0.12, 0.12),
+			Color(0.98, 0.22, 0.18),
+			Color(1.0, 0.28, 0.22),
+		])
+	elif ratio < 0.5:
+		_timer_gradient.colors = PackedColorArray([
+			Color(0.92, 0.48, 0.06),
+			Color(1.0, 0.62, 0.12),
+			Color(0.96, 0.55, 0.08),
+		])
+	else:
+		_timer_gradient.colors = PackedColorArray([
+			Color(0.12, 0.68, 0.36),
+			Color(0.2, 0.8, 0.42),
+			Color(0.16, 0.74, 0.38),
+		])
 
 	var should_pulse := score_manager.remaining_time <= 10.0 and score_manager.remaining_time > 0.0 \
 		and game_state == GameState.PLAYING and _timer_running and not _is_paused

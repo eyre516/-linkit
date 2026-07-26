@@ -2801,3 +2801,90 @@ cd assets/连连看例子
 
 - 命令行 `--headless --quit` 加载无脚本错误。
 - 建议在编辑器中运行：顶部 UI 隐藏后，确认“菜单栏”标签位于倒计时栏下方约 2px；鼠标移到标签上或屏幕顶部时，完整菜单栏都能恢复显示。
+
+
+## 2026-07-26 03:40
+
+**原因**：用户指出 `generate_board()` 与 `shuffle_remaining()` 使用纯随机洗牌 + 检查的方式，在高级大棋盘、图案种类接近对数时很容易生成死局或洗牌失败。经沟通后改用构造性布局方案：主动放置保证可连通的图块对，再随机填充其余位置。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**：
+   - 重写 `generate_board()`：
+	 - 不再使用 2000 次随机尝试；
+	 - 用 `_build_tiles_by_type_for_generate()` 构造图案数量表；
+	 - 调用 `_place_guaranteed_pairs()` 放置保证对；
+	 - 调用 `_fill_remaining()` 随机填充其余位置。
+   - 重写 `shuffle_remaining()`：
+	 - 收集剩余图案并清空原非空格子；
+	 - 根据剩余对数动态决定目标对数 `required = mini(MIN_MATCHABLE_PAIRS, maxi(1, pairs_left / 2))`；
+	 - 调用 `_place_guaranteed_pairs()` + `_fill_remaining()` 完成洗牌。
+   - 新增 `_build_tiles_by_type_for_generate(rows, cols, tile_count)`：按原有规则生成每种图案的数量表（保持偶数个）。
+   - 新增 `_place_guaranteed_pairs(available_positions, tiles_by_type, required)`：
+	 - 阶段 1：贪心随机放置相邻对（保证 0 转弯可连通）；
+	 - 阶段 2：若未达目标，尝试放置同行/同列对（稀疏棋盘仍较大概率可连通）；
+	 - 返回实际放置对数，并将未使用位置保留给 `_fill_remaining()`。
+   - 新增 `_find_type_with_min_count(tiles_by_type, min_count)`：随机返回剩余数量不少于 `min_count` 的图案。
+   - 新增 `_fill_remaining(available_positions, tiles_by_type)`：将剩余图案打乱后填入剩余位置。
+   - 移除 `generate_board()` 与 `shuffle_remaining()` 中的 2000 次尝试循环和警告信息。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 139–174 行：`generate_board()` 新实现。
+- `managers/board_manager.gd` 第 176–220 行：新增 `_build_tiles_by_type_for_generate()`、`_place_guaranteed_pairs()`、`_find_type_with_min_count()`、`_fill_remaining()`。
+- `managers/board_manager.gd` 第 684–706 行：`shuffle_remaining()` 新实现。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在不同难度下反复开始新局/触发洗牌，确认：
+  - 棋盘生成迅速，不再出现“未能在 2000 次尝试内生成”警告；
+  - 生成的棋盘始终存在可连通对；
+  - 中盘/残局洗牌后也能继续游戏，死局频率明显降低。
+
+
+## 2026-07-26 03:55
+
+**原因**：用户希望每局开始和每次洗牌后，保证的可连通对数从 5 对降到 3 对，降低布局约束、减少碎片棋盘上强行凑对的痕迹。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**：
+   - 将常量 `MIN_MATCHABLE_PAIRS` 从 `5` 改为 `3`。
+   - 该常量同时控制 `generate_board()` 开局放置的保证对数和 `shuffle_remaining()` 的目标对数上限。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 13 行：`MIN_MATCHABLE_PAIRS` 定义。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中开始新局并触发洗牌，确认棋盘生成/洗牌仍然迅速，且每局至少有 3 对保证可连通的图块。
+
+
+## 2026-07-26 04:05
+
+**原因**：用户希望倒计时进度条根据剩余时间比例变色：剩余少于 50% 时变为橙色，少于 30% 时变为红色，并且每个区间都保持类似当前的渐进色效果。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 新增 `@onready var _timer_gradient: Gradient = %TimerBar.get_theme_stylebox("fill").texture.gradient`，获取进度条填充渐变资源（两个进度条共享同一资源）。
+   - 在 `_update_timer_bar()` 中根据 `remaining_time / MAX_TIME` 动态设置 `_timer_gradient.colors`：
+	 - `ratio < 0.3`：红色相邻色渐变（深红 → 亮红 → 橙红）；
+	 - `0.3 <= ratio < 0.5`：橙色相邻色渐变（深橙 → 亮橙 → 金橙）；
+	 - `ratio >= 0.5`：绿色相邻色渐变（深绿 → 翠绿 → 青绿）。
+
+**影响位置**：
+
+- `game.gd` 第 137–139 行：新增 `_timer_gradient` 引用。
+- `game.gd` 第 1302–1328 行：`_update_timer_bar()` 新增颜色切换逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中启动游戏并观察倒计时条：
+  - 时间充足（>50%）时呈绿色渐变；
+  - 时间降至 30%–50% 时变为橙色渐变；
+  - 时间低于 30% 时变为红色渐变。

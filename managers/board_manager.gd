@@ -10,7 +10,7 @@ enum Level4Dir {UP, DOWN}
 const ROWS := 7
 const COLS := 12
 const PAIRS := 42
-const MIN_MATCHABLE_PAIRS := 5
+const MIN_MATCHABLE_PAIRS := 3
 const DIRECTIONS := [Vector2i(-1, 0), Vector2i(0, 1), Vector2i(1, 0), Vector2i(0, -1)]
 
 # 经典图版各难度的棋盘尺寸（行, 列）与图块文件夹
@@ -142,36 +142,173 @@ func generate_board() -> void:
 	var pairs := get_pairs()
 	var tile_count := mini(get_skin_tile_count(), pairs)
 
-	var tiles: Array[int] = []
-	for type in range(1, tile_count + 1):
-		tiles.append(type)
-		tiles.append(type)
+	var tiles_by_type := _build_tiles_by_type_for_generate(rows, cols, tile_count)
 
-	var next_type := 1
-	while tiles.size() < rows * cols:
-		tiles.append(next_type)
-		tiles.append(next_type)
-		next_type = next_type % tile_count + 1
+	# 清空棋盘
+	board.clear()
+	for r in range(rows):
+		board.append([])
+		for c in range(cols):
+			board[r].append(0)
+
+	var available_positions: Array[Vector2i] = []
+	for r in range(rows):
+		for c in range(cols):
+			available_positions.append(Vector2i(r, c))
 
 	var required := mini(MIN_MATCHABLE_PAIRS, pairs)
-	var attempts := 0
-	while true:
-		tiles.shuffle()
-		board.clear()
-		for r in range(rows):
-			board.append([])
-			for c in range(cols):
-				board[r].append(tiles[r * cols + c])
-
-		if count_matchable_pairs(required) >= required:
-			break
-
-		attempts += 1
-		if attempts > 2000:
-			push_warning("未能在 2000 次尝试内生成含 %d 对可消除牌的棋盘" % required)
-			break
+	_place_guaranteed_pairs(available_positions, tiles_by_type, required)
+	_fill_remaining(available_positions, tiles_by_type)
 
 	pairs_left = pairs
+
+
+# 按原有规则构造生成所需的图案数量表：每种图案均为偶数个
+func _build_tiles_by_type_for_generate(rows: int, cols: int, tile_count: int) -> Dictionary[int, int]:
+	var tiles_by_type: Dictionary[int, int] = {}
+	for type in range(1, tile_count + 1):
+		tiles_by_type[type] = 2
+
+	var next_type := 1
+	var total_tiles := tile_count * 2
+	while total_tiles < rows * cols:
+		tiles_by_type[next_type] += 2
+		total_tiles += 2
+		next_type = next_type % tile_count + 1
+
+	return tiles_by_type
+
+
+# 贪心随机放置 required 对图块，优先相邻（保证 0 转弯可连通），
+# 不足时再尝试同行/同列（在稀疏棋盘上仍有较高概率可连通）。
+# 返回实际放置的对数，并将用过的位置从 available_positions 中移除。
+func _place_guaranteed_pairs(available_positions: Array[Vector2i], tiles_by_type: Dictionary[int, int], required: int) -> int:
+	var pairable_set: Dictionary[Vector2i, bool] = {}
+	for pos in available_positions:
+		pairable_set[pos] = true
+
+	var placed := 0
+	var used_positions: Dictionary[Vector2i, bool] = {}
+
+	# 阶段 1：相邻对
+	while placed < required and not pairable_set.is_empty():
+		var keys: Array = pairable_set.keys()
+		var pos: Vector2i = keys[randi() % keys.size()]
+
+		var neighbors: Array[Vector2i] = []
+		for dir in DIRECTIONS:
+			var neighbor: Vector2i = pos + dir
+			if pairable_set.has(neighbor):
+				neighbors.append(neighbor)
+
+		if neighbors.is_empty():
+			pairable_set.erase(pos)
+			continue
+
+		var neighbor: Vector2i = neighbors[randi() % neighbors.size()]
+		var type := _find_type_with_min_count(tiles_by_type, 2)
+		if type == -1:
+			break
+
+		tiles_by_type[type] -= 2
+		if tiles_by_type[type] == 0:
+			tiles_by_type.erase(type)
+
+		board[pos.x][pos.y] = type
+		board[neighbor.x][neighbor.y] = type
+		used_positions[pos] = true
+		used_positions[neighbor] = true
+		pairable_set.erase(pos)
+		pairable_set.erase(neighbor)
+		placed += 1
+
+	# 阶段 2：同行/同列对（稀疏时仍可较大概率连通）
+	if placed < required:
+		var row_groups: Dictionary[int, Array] = {}
+		var col_groups: Dictionary[int, Array] = {}
+		for pos in pairable_set.keys():
+			if not row_groups.has(pos.x):
+				row_groups[pos.x] = []
+			row_groups[pos.x].append(pos)
+			if not col_groups.has(pos.y):
+				col_groups[pos.y] = []
+			col_groups[pos.y].append(pos)
+
+		var candidates: Array[Vector2i] = []
+		for positions in row_groups.values():
+			for i in range(positions.size()):
+				for j in range(i + 1, positions.size()):
+					candidates.append(positions[i])
+					candidates.append(positions[j])
+		for positions in col_groups.values():
+			for i in range(positions.size()):
+				for j in range(i + 1, positions.size()):
+					candidates.append(positions[i])
+					candidates.append(positions[j])
+
+		# 候选对每两个 Vector2i 为一组，打乱后依次尝试
+		var pair_count := int(candidates.size() / 2.0)
+		var order: Array[int] = []
+		for i in range(pair_count):
+			order.append(i)
+		order.shuffle()
+
+		for idx in order:
+			if placed >= required:
+				break
+			var p1: Vector2i = candidates[idx * 2]
+			var p2: Vector2i = candidates[idx * 2 + 1]
+			if used_positions.has(p1) or used_positions.has(p2):
+				continue
+			var type := _find_type_with_min_count(tiles_by_type, 2)
+			if type == -1:
+				break
+
+			tiles_by_type[type] -= 2
+			if tiles_by_type[type] == 0:
+				tiles_by_type.erase(type)
+
+			board[p1.x][p1.y] = type
+			board[p2.x][p2.y] = type
+			used_positions[p1] = true
+			used_positions[p2] = true
+			pairable_set.erase(p1)
+			pairable_set.erase(p2)
+			placed += 1
+
+	# 将未使用的可用位置保留下来，供后续随机填充
+	var remaining: Array[Vector2i] = []
+	for pos in available_positions:
+		if not used_positions.has(pos):
+			remaining.append(pos)
+	available_positions.clear()
+	available_positions.append_array(remaining)
+
+	return placed
+
+
+# 从 tiles_by_type 中找出剩余数量不少于 min_count 的随机一种图案
+func _find_type_with_min_count(tiles_by_type: Dictionary[int, int], min_count: int) -> int:
+	var candidates: Array[int] = []
+	for type: int in tiles_by_type.keys():
+		if tiles_by_type[type] >= min_count:
+			candidates.append(type)
+	if candidates.is_empty():
+		return -1
+	return candidates[randi() % candidates.size()]
+
+
+# 将剩余图块随机填入剩余位置
+func _fill_remaining(available_positions: Array[Vector2i], tiles_by_type: Dictionary[int, int]) -> void:
+	var remaining_tiles: Array[int] = []
+	for type: int in tiles_by_type.keys():
+		for i in range(tiles_by_type[type]):
+			remaining_tiles.append(type)
+	remaining_tiles.shuffle()
+
+	for i in range(available_positions.size()):
+		var pos: Vector2i = available_positions[i]
+		board[pos.x][pos.y] = remaining_tiles[i]
 
 
 # 消除指定两个格子
@@ -602,37 +739,29 @@ func _animate_collapse(old_board: Array, duration: float) -> Tween:
 
 # 手动重排剩余图案，确保洗牌后仍有足够可消除对
 func shuffle_remaining() -> void:
-	var remaining: Array[int] = []
+	var tiles_by_type: Dictionary[int, int] = {}
+	var available_positions: Array[Vector2i] = []
+
 	for r in range(get_rows()):
 		for c in range(get_cols()):
-			if board[r][c] != 0:
-				remaining.append(board[r][c])
+			var type: int = board[r][c]
+			if type == 0:
+				continue
+			tiles_by_type[type] = tiles_by_type.get(type, 0) + 1
+			available_positions.append(Vector2i(r, c))
+			board[r][c] = 0
 
-	if remaining.is_empty():
+	if available_positions.is_empty():
 		return
 
-	var pairs_left := int(remaining.size() / 2.0)
-	var required := mini(MIN_MATCHABLE_PAIRS, pairs_left)
-	# 剩余对数较少时，不要求全部可连通，否则大棋盘后期很难找到合法布局
-	if pairs_left < MIN_MATCHABLE_PAIRS:
-		required = maxi(1, int(pairs_left / 2.0))
-	var attempts := 0
-	while true:
-		remaining.shuffle()
-		var idx := 0
-		for r in range(get_rows()):
-			for c in range(get_cols()):
-				if board[r][c] != 0:
-					board[r][c] = remaining[idx]
-					idx += 1
+	var pairs_left := int(available_positions.size() / 2.0)
+	# 根据剩余对数动态决定需要保证的可连通对数：
+	# 对数较多时保证 MIN_MATCHABLE_PAIRS 对；对数较少时保证至少一半，
+	# 避免大棋盘后期或棋盘碎片化时无法找到足够相邻空位。
+	var required := mini(MIN_MATCHABLE_PAIRS, maxi(1, int(pairs_left / 2.0)))
 
-		if count_matchable_pairs(required) >= required:
-			break
-
-		attempts += 1
-		if attempts > 2000:
-			push_warning("未能在 2000 次尝试内洗出含 %d 对可消除牌的棋盘" % required)
-			break
+	_place_guaranteed_pairs(available_positions, tiles_by_type, required)
+	_fill_remaining(available_positions, tiles_by_type)
 
 
 # ---------- 坍塌实现 ----------
