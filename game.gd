@@ -45,7 +45,6 @@ const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 
 
 # 加分反馈相关常量
 const SCHEME_1_FLOATING_TEXT_ENABLED := true  # 方案 1：消除位置飘字（可独立开关）
-const AUTO_HIDE_HINT_MAX := 1           # 每局游戏最多显示几次恢复提示
 
 # 自定义弹窗类型与回调
 enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, MODE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT}
@@ -71,15 +70,10 @@ var _compact_timer_pulse_tween: Tween = null
 
 var _ui_hidden: bool = false
 var _top_leave_time: float = 0.0
-var _auto_hide_hint_count: int = 0
-var _hint_flash_tween: Tween = null
 
-# 鼠标按键状态（用于左右键同时按下的洗牌快捷键）
-var _left_mouse_pressed: bool = false
-var _right_mouse_pressed: bool = false
-var _left_press_time: int = 0
-var _right_press_time: int = 0
-const MOUSE_COMBO_WINDOW_MS := 150
+# 鼠标右键双击洗牌的判定窗口（秒），同时决定单次右键提示的延迟
+const RIGHT_CLICK_DOUBLE_INTERVAL := 0.25
+var _right_click_timer: Timer = null
 
 # 当前难度：1=初级，2=中级，3=高级
 var current_level: int = 1
@@ -149,8 +143,7 @@ var bgm_volume: float = 0.5
 @onready var toolbar: HBoxContainer = %HBoxContainer
 @onready var compact_top_bar: PanelContainer = %CompactTopBar
 @onready var ui_hide_timer: Timer = %UIHideTimer
-@onready var auto_hide_hint: RichTextLabel = %AutoHideHint
-@onready var hint_hide_timer: Timer = %HintHideTimer
+@onready var menu_bar_tab: PanelContainer = %MenuBarTab
 @onready var grid_container: GridContainer = %GridContainer
 @onready var aspect_ratio_container: AspectRatioContainer = %AspectRatioContainer
 @onready var board_center: CenterContainer = %BoardCenter
@@ -282,6 +275,13 @@ func _ready() -> void:
 	_score_popup_tweens.resize(score_popups.size())
 	for i in range(_score_popup_tweens.size()):
 		_score_popup_tweens[i] = null
+
+	# 初始化右键双击洗牌的判定计时器
+	_right_click_timer = Timer.new()
+	_right_click_timer.one_shot = true
+	_right_click_timer.wait_time = RIGHT_CLICK_DOUBLE_INTERVAL
+	_right_click_timer.timeout.connect(_on_right_click_timer_timeout)
+	add_child(_right_click_timer)
 
 
 # 最终关卡胜利
@@ -569,11 +569,11 @@ func _show_welcome_dialog() -> void:
 
 	var must_read_text := "[center][color=#8B0000][font_size=30]【必看】[/font_size][/color]\n\n"
 	must_read_text += "[color=#660000][font_size=22]本游戏分竞技模式与休闲模式；[/font_size][/color]\n"
-	must_read_text += "[color=#8B0000][font_size=24]鼠标双击暂停，右键单击提示。[/font_size][/color][/center]"
+	must_read_text += "[color=#8B0000][font_size=24]鼠标双击暂停；右键单击提示，右键双击洗牌。[/font_size][/color][/center]"
 
 	var op_text := "[center][color=#E0B45A][font_size=28][b]【操作说明】[/b][/font_size][/color]\n\n"
-	op_text += "[color=#FFF8F0][font_size=22][color=#5AB4E0][b]T / 鼠标右键[/b][/color]：提示\n"
-	op_text += "[color=#5AB4E0][b]X / 左右键同时按[/b][/color]：洗牌\n"
+	op_text += "[color=#FFF8F0][font_size=22][color=#5AB4E0][b]T / 鼠标右键单击[/b][/color]：提示\n"
+	op_text += "[color=#5AB4E0][b]X / 鼠标右键双击[/b][/color]：洗牌\n"
 	op_text += "[color=#5AB4E0][b]空格键 / 双击[/b][/color]：暂停 / 继续\n"
 	op_text += "[color=#5AB4E0][b]鼠标左键[/b][/color]：选择 / 消除[/font_size][/color][/center]"
 
@@ -850,12 +850,16 @@ func _setup_menus() -> void:
 	])
 
 
-# 判断鼠标是否位于菜单栏或任意已打开的弹出菜单上（含下拉项）
+# 判断鼠标是否位于菜单栏、菜单栏小标签或任意已打开的弹出菜单上
 func _is_mouse_over_menu() -> bool:
 	var mouse_pos := get_global_mouse_position()
 
 	# 菜单栏区域
 	if menu_bar.get_global_rect().has_point(mouse_pos):
+		return true
+
+	# 隐藏时露出的菜单栏小标签
+	if menu_bar_tab.visible and menu_bar_tab.get_global_rect().has_point(mouse_pos):
 		return true
 
 	# 任意弹出菜单可见时保持完整 UI（Godot 4 中 PopupMenu 继承 Window，无 get_global_rect）
@@ -977,7 +981,7 @@ func _on_help_menu_item_pressed(index: int) -> void:
 			var mode_rules := "【休闲模式】\n提示与洗牌可无限使用，适合轻松练习。\n\n【竞技模式】\n每关开始时分配固定次数的提示与洗牌：\n第 1–7 关：5 次提示、2 次洗牌\n第 8–10 关：8 次提示、3 次洗牌\n次数用尽后对应按钮将变灰且无法使用。"
 			_show_custom_dialog(DialogType.MODE_RULES, "模式说明", mode_rules)
 		2:
-			var shortcuts := "T / 鼠标右键：提示（高亮显示一对可连通的图案）\nX / 鼠标左右键同时按下：洗牌（重新排列剩余图案）\n空格键 / 鼠标左键快速双击：暂停 / 继续游戏\n鼠标左键：点击选择或消除图案"
+			var shortcuts := "T / 鼠标右键单击：提示（高亮显示一对可连通的图案）\nX / 鼠标右键双击：洗牌（重新排列剩余图案）\n空格键 / 鼠标左键快速双击：暂停 / 继续游戏\n鼠标左键：点击选择或消除图案"
 			_show_custom_dialog(DialogType.SHORTCUTS, "快捷键说明", shortcuts)
 		3:
 			var score_rules := "从上一次消除完成到下一次消除完成的时间间隔决定得分：\n3 秒内消除：30 分\n5 秒内消除：20 分\n10 秒内消除：15 分\n20 秒内消除：12 分\n超过 20 秒：10 分"
@@ -1063,6 +1067,11 @@ func _hide_custom_dialog() -> void:
 	_dialog_callback = Callable()
 
 
+# 右键单击延迟到期后执行提示
+func _on_right_click_timer_timeout() -> void:
+	_on_hint_button_pressed()
+
+
 # 键盘与鼠标快捷键处理
 func _input(event: InputEvent) -> void:
 	# 设置面板打开时，按 Esc 关闭设置面板
@@ -1106,20 +1115,17 @@ func _input(event: InputEvent) -> void:
 
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				_left_mouse_pressed = event.pressed
-				if event.pressed:
-					_left_press_time = Time.get_ticks_msec()
-					if _right_mouse_pressed and (Time.get_ticks_msec() - _right_press_time <= MOUSE_COMBO_WINDOW_MS):
-						_on_shuffle_button_pressed()
-						get_viewport().set_input_as_handled()
+				# 左键点击时取消待触发的右键提示，避免与正常选牌冲突
+				if event.pressed and _right_click_timer != null and not _right_click_timer.is_stopped():
+					_right_click_timer.stop()
 			MOUSE_BUTTON_RIGHT:
-				_right_mouse_pressed = event.pressed
 				if event.pressed:
-					_right_press_time = Time.get_ticks_msec()
-					if _left_mouse_pressed and (Time.get_ticks_msec() - _left_press_time <= MOUSE_COMBO_WINDOW_MS):
+					# 右键双击：洗牌；右键单击：延迟触发提示
+					if _right_click_timer != null and not _right_click_timer.is_stopped():
+						_right_click_timer.stop()
 						_on_shuffle_button_pressed()
 					else:
-						_on_hint_button_pressed()
+						_right_click_timer.start()
 					get_viewport().set_input_as_handled()
 
 
@@ -1204,25 +1210,8 @@ func _show_compact_ui() -> void:
 	info_bar.hide()
 	toolbar.hide()
 	compact_top_bar.show()
+	menu_bar_tab.show()
 	_update_compact_ui()
-	# 每局首次进入紧凑模式时显示闪烁 3 次后再停留 5 秒的恢复提示
-	if _auto_hide_hint_count < AUTO_HIDE_HINT_MAX:
-		_auto_hide_hint_count += 1
-		auto_hide_hint.show()
-		auto_hide_hint.modulate = Color.WHITE
-		auto_hide_hint.scale = Vector2(1.0, 1.0)
-		hint_hide_timer.stop()
-		if _hint_flash_tween != null:
-			_hint_flash_tween.kill()
-		_hint_flash_tween = create_tween()
-		_hint_flash_tween.set_loops(3)
-		# 每次闪烁：仅通过缩放脉冲提醒，不改变透明度，避免文字变暗变糊
-		_hint_flash_tween.tween_property(auto_hide_hint, "scale", Vector2(1.08, 1.08), 0.75)
-		_hint_flash_tween.chain().tween_property(auto_hide_hint, "scale", Vector2(1.0, 1.0), 0.75)
-		_hint_flash_tween.finished.connect(func() -> void:
-			hint_hide_timer.start(5.0)
-			_hint_flash_tween = null
-		)
 
 
 # 恢复完整顶部 UI（菜单栏、信息栏、工具栏）
@@ -1233,13 +1222,7 @@ func _show_full_ui() -> void:
 	info_bar.show()
 	toolbar.show()
 	compact_top_bar.hide()
-	auto_hide_hint.hide()
-	auto_hide_hint.modulate = Color.WHITE
-	auto_hide_hint.scale = Vector2(1.0, 1.0)
-	hint_hide_timer.stop()
-	if _hint_flash_tween != null:
-		_hint_flash_tween.kill()
-		_hint_flash_tween = null
+	menu_bar_tab.hide()
 
 
 # 刷新紧凑顶部 UI 的倒计时条、本关用时与分数
@@ -1257,13 +1240,6 @@ func _on_ui_hide_timer_timeout() -> void:
 	if get_global_mouse_position().y <= TOP_TRIGGER_HEIGHT or _is_mouse_over_menu():
 		return
 	_show_compact_ui()
-
-
-# 提示闪烁结束并停留 5 秒后隐藏恢复提示
-func _on_hint_hide_timer_timeout() -> void:
-	auto_hide_hint.hide()
-	auto_hide_hint.modulate = Color.WHITE
-	auto_hide_hint.scale = Vector2(1.0, 1.0)
 
 
 # 重置游戏状态、棋盘与倒计时
@@ -1285,7 +1261,6 @@ func restart_game(reset_progress: bool = true) -> void:
 	_pending_next_level = -1
 	_ui_hidden = false
 	_top_leave_time = 0.0
-	_auto_hide_hint_count = 0
 
 	score_manager.reset(reset_progress)
 	board_manager.generate_board()
@@ -1301,12 +1276,6 @@ func restart_game(reset_progress: bool = true) -> void:
 	else:
 		hints_remaining = 0
 		shuffles_remaining = 0
-
-	# 重置鼠标按键状态，避免跨关卡误触发左右键组合快捷键
-	_left_mouse_pressed = false
-	_right_mouse_pressed = false
-	_left_press_time = 0
-	_right_press_time = 0
 
 	# 每次重新开始后恢复完整 UI，并在 5 秒后尝试自动隐藏
 	_show_full_ui()
@@ -1663,6 +1632,10 @@ func _on_hint_button_pressed() -> void:
 	if current_mode == GameMode.COMPETITIVE and hints_remaining <= 0:
 		return
 
+	# 取消待触发的右键单击提示，避免与 T 键/按钮重复触发
+	if _right_click_timer != null and not _right_click_timer.is_stopped():
+		_right_click_timer.stop()
+
 	var path: Array[Vector2i] = board_manager.find_hint_pair()
 	if path.is_empty():
 		return
@@ -1702,6 +1675,10 @@ func _on_shuffle_button_pressed() -> void:
 
 	if current_mode == GameMode.COMPETITIVE and shuffles_remaining <= 0:
 		return
+
+	# 取消待触发的右键单击提示，避免与 X 键/按钮重复触发
+	if _right_click_timer != null and not _right_click_timer.is_stopped():
+		_right_click_timer.stop()
 
 	if current_mode == GameMode.COMPETITIVE:
 		shuffles_remaining -= 1

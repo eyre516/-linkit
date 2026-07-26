@@ -611,7 +611,11 @@ func shuffle_remaining() -> void:
 	if remaining.is_empty():
 		return
 
-	var required := mini(MIN_MATCHABLE_PAIRS, int(remaining.size() / 2.0))
+	var pairs_left := int(remaining.size() / 2.0)
+	var required := mini(MIN_MATCHABLE_PAIRS, pairs_left)
+	# 剩余对数较少时，不要求全部可连通，否则大棋盘后期很难找到合法布局
+	if pairs_left < MIN_MATCHABLE_PAIRS:
+		required = maxi(1, int(pairs_left / 2.0))
 	var attempts := 0
 	while true:
 		remaining.shuffle()

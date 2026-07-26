@@ -2662,3 +2662,142 @@ cd assets/连连看例子
 
 - 命令行 `--headless --quit` 加载无脚本错误。
 - 建议在编辑器中制造死局（或等待自然出现），确认屏幕中央出现提示文字，格子缩放淡出/洗牌音效/淡入，动画结束后恢复游戏。
+
+
+## 2026-07-26 02:10
+
+**原因**：用户指出 `shuffle_remaining()` 在剩余对数少于 `MIN_MATCHABLE_PAIRS`（5）时，仍要求所有剩余对都可连通，大棋盘后期可能很难满足，导致洗牌失败或耗时过长。
+
+**改动**：
+
+1. **`managers/board_manager.gd`**：
+   - 在 `shuffle_remaining()` 中先计算 `pairs_left`。
+   - 当 `pairs_left < MIN_MATCHABLE_PAIRS` 时，将 `required` 放宽为 `maxi(1, int(pairs_left / 2.0))`：
+	 - 4 对剩余 → 至少 2 对可连通；
+	 - 3 对剩余 → 至少 1 对可连通；
+	 - 2 对/1 对剩余 → 至少 1 对可连通。
+   - 保持 `pairs_left >= 5` 时仍要求至少 5 对可连通，避免过早进入死局。
+
+**影响位置**：
+
+- `managers/board_manager.gd` 第 614–620 行：`shuffle_remaining()` 中 `required` 的计算逻辑。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中玩到剩余 4 对及以下时触发手动/自动洗牌，确认不再因要求全部可连通而长时间尝试或失败。
+
+
+## 2026-07-26 02:40
+
+**原因**：用户反馈当前“右键提示 + 左右键同时按洗牌”在快速操作时容易误触发洗牌，希望改为鼠标右键双击洗牌，并同步更新欢迎弹窗与帮助菜单说明。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 移除原来的左右键同时按组合洗牌逻辑（`_left_mouse_pressed`、`_right_mouse_pressed`、`_left_press_time`、`_right_press_time`、`MOUSE_COMBO_WINDOW_MS`）。
+   - 新增 `RIGHT_CLICK_DOUBLE_INTERVAL` 常量（0.25 秒）与 `_right_click_timer` 计时器。
+   - 在 `_ready()` 中创建并配置 `Timer`：单次触发，timeout 连接到 `_on_right_click_timer_timeout()`。
+   - 新增 `_on_right_click_timer_timeout()`：延迟到期后执行提示。
+   - 重写 `_input()` 中的右键处理：
+	 - 第一次右键按下：启动计时器（提示延迟触发）。
+	 - 在计时器窗口内再次右键按下：停止计时器并执行洗牌。
+	 - 左键按下时停止待触发的右键提示，避免与正常选牌冲突。
+   - 在 `_on_hint_button_pressed()` 与 `_on_shuffle_button_pressed()` 开头停止 `_right_click_timer`，防止 T/X 键或 UI 按钮与待触发的鼠标操作重复触发。
+   - 更新欢迎弹窗操作说明：
+	 - “鼠标双击暂停；右键单击提示，右键双击洗牌。”
+	 - 详细列表改为 “T / 鼠标右键单击：提示”、“X / 鼠标右键双击：洗牌”。
+   - 更新 `Help > 快捷键说明`：鼠标右键操作改为“右键单击提示 / 右键双击洗牌”。
+
+**影响位置**：
+
+- `game.gd` 第 77–79 行：新增常量与计时器变量。
+- `game.gd` 第 283–288 行：`_ready()` 中初始化计时器。
+- `game.gd` 第 1070–1072 行：新增 `_on_right_click_timer_timeout()`。
+- `game.gd` 第 1116–1129 行：`_input()` 中新的左右键处理逻辑。
+- `game.gd` 第 1666–1668 行：`_on_hint_button_pressed()` 取消待触发提示。
+- `game.gd` 第 1710–1712 行：`_on_shuffle_button_pressed()` 取消待触发提示。
+- `game.gd` 第 576、579–580 行：欢迎弹窗说明文本。
+- `game.gd` 第 984 行：帮助菜单快捷键说明文本。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中测试：
+  - 右键单击延迟约 0.25 秒后触发提示；
+  - 快速右键双击触发洗牌，且不会额外消耗一次提示；
+  - 左键单击取消待触发的右键提示；
+  - 欢迎弹窗与帮助菜单中的说明文本已更新。
+
+
+## 2026-07-26 02:55
+
+**原因**：用户反馈顶部 UI 自动隐藏后，自动恢复提示文字会遮挡棋盘；希望去掉提示文字，改为在隐藏时从顶部伸出一个写有“菜单栏”的小标签。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 移除与自动隐藏提示相关的常量、变量、`@onready` 引用：
+	 - `AUTO_HIDE_HINT_MAX`
+	 - `_auto_hide_hint_count`
+	 - `_hint_flash_tween`
+	 - `auto_hide_hint`
+	 - `hint_hide_timer`
+   - 新增 `@onready var menu_bar_tab: PanelContainer = %MenuBarTab`。
+   - 重写 `_show_compact_ui()`：进入紧凑 UI 时显示 `menu_bar_tab`，不再播放提示文字动画。
+   - 重写 `_show_full_ui()`：恢复完整 UI 时隐藏 `menu_bar_tab`。
+   - 删除 `_on_hint_hide_timer_timeout()` 函数。
+   - 在 `restart_game()` 中移除 `_auto_hide_hint_count = 0`。
+
+2. **`game.tscn`**：
+   - 删除 `HintHideTimer` 节点及其 timeout 信号连接。
+   - 删除 `CanvasLayer/AutoHideHint` 节点。
+   - 在 `CanvasLayer` 下新增 `MenuBarTab`（`PanelContainer`）：
+	 - 使用 `theme_type_variation = &"MenuBarPanel"`；
+	 - 默认 `visible = false`；
+	 - 位于屏幕左上角（`offset_left = 16`，`offset_top = 0`，尺寸约 86×34）；
+	 - 内部一个 `Label`，文本为“菜单栏”，水平垂直居中。
+
+**影响位置**：
+
+- `game.gd` 第 48 行：删除 `AUTO_HIDE_HINT_MAX`。
+- `game.gd` 第 72–75 行：删除 `_auto_hide_hint_count`、`_hint_flash_tween`。
+- `game.gd` 第 146–150 行（原）：替换 `auto_hide_hint`、`hint_hide_timer` 为 `menu_bar_tab`。
+- `game.gd` 第 1201–1221 行：`_show_compact_ui()` / `_show_full_ui()` 新逻辑。
+- `game.gd` 第 1235–1240 行（原）：删除 `_on_hint_hide_timer_timeout()`。
+- `game.gd` 第 1263–1265 行（原）：删除 `_auto_hide_hint_count = 0`。
+- `game.tscn` 第 69–72 行（原）：删除 `HintHideTimer` 节点。
+- `game.tscn` 第 635–670 行（原）：删除 `AutoHideHint` 节点。
+- `game.tscn` 第 1126 行（原）：删除 `HintHideTimer` 信号连接。
+- `game.tscn` 第 630–644 行：新增 `MenuBarTab` 节点。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行：等待顶部 UI 自动隐藏后，确认左上角出现“菜单栏”小标签，鼠标移到屏幕顶部后完整 UI 恢复、标签隐藏，且不再显示竖排提示文字。
+
+
+## 2026-07-26 03:15
+
+**原因**：用户希望菜单栏小标签位置下移，紧贴在倒计时栏下沿下方 2px 处；并且鼠标移到小标签上方时也要能唤出完整菜单栏。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 调整 `MenuBarTab` 的位置：
+	 - `offset_top` 从 `0.0` 改为 `58.0`（VBoxContainer 顶部偏移 8px + CompactTopBar 高度 48px + 间距 2px）；
+	 - `offset_bottom` 从 `34.0` 改为 `92.0`，保持高度 34px。
+
+2. **`game.gd`**：
+   - 在 `_is_mouse_over_menu()` 中增加对 `menu_bar_tab` 的检测：当小标签可见且鼠标位于其全局矩形内时返回 `true`。
+   - 这样 `_process()` 中的“鼠标在菜单区域则恢复完整 UI”逻辑会自动覆盖小标签悬停场景。
+
+**影响位置**：
+
+- `game.tscn` 第 633–637 行：`MenuBarTab` 的 `offset_top` / `offset_bottom`。
+- `game.gd` 第 853–868 行：`_is_mouse_over_menu()` 新增小标签检测。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行：顶部 UI 隐藏后，确认“菜单栏”标签位于倒计时栏下方约 2px；鼠标移到标签上或屏幕顶部时，完整菜单栏都能恢复显示。

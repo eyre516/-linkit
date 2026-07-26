@@ -66,11 +66,6 @@ unique_name_in_owner = true
 wait_time = 5.0
 one_shot = true
 
-[node name="HintHideTimer" type="Timer" parent="."]
-unique_name_in_owner = true
-wait_time = 5.0
-one_shot = true
-
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -632,42 +627,21 @@ layout_mode = 2
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
-[node name="AutoHideHint" type="RichTextLabel" parent="CanvasLayer"]
+[node name="MenuBarTab" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
-anchors_preset = 4
-anchor_top = 0.5
-anchor_bottom = 0.5
+anchors_preset = 0
 offset_left = 16.0
-offset_top = -250.0
-offset_right = 150.0
-offset_bottom = 250.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_font_sizes/normal_font_size = 44
-theme_override_fonts/normal_font = ExtResource("4_2epjp")
-bbcode_enabled = true
-text = "[outline_size=3][outline_color=#000000][color=#FFD700][table=2]
-[cell]将[outline_size=6][outline_color=#000000]
-鼠
-标[/outline_color][/outline_size]
-移
-到
-[outline_size=6][outline_color=#000000]屏
-幕
-顶
-部[/outline_color][/outline_size][/cell]
-[cell]即
-可
-恢
-复[outline_size=6][outline_color=#000000]
-菜
-单
-栏[/outline_color][/outline_size][/cell]
-[/table][/color][/outline_color][/outline_size]"
-fit_content = true
-scroll_active = false
-autowrap_mode = 0
+offset_top = 58.0
+offset_right = 102.0
+offset_bottom = 92.0
+theme_type_variation = &"MenuBarPanel"
+
+[node name="Label" type="Label" parent="CanvasLayer/MenuBarTab"]
+layout_mode = 2
+text = "菜单栏"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="GameOverPanel" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -1149,7 +1123,6 @@ theme_override_font_sizes/font_size = 32
 text = "返回"
 
 [connection signal="timeout" from="UIHideTimer" to="." method="_on_ui_hide_timer_timeout"]
-[connection signal="timeout" from="HintHideTimer" to="." method="_on_hint_hide_timer_timeout"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/UndoButton" to="." method="_on_undo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RedoButton" to="." method="_on_redo_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/HBoxContainer/RestartButton" to="." method="_on_restart_button_pressed"]
