@@ -2888,3 +2888,646 @@ cd assets/连连看例子
   - 时间充足（>50%）时呈绿色渐变；
   - 时间降至 30%–50% 时变为橙色渐变；
   - 时间低于 30% 时变为红色渐变。
+
+
+## 2026-07-26 04:25
+
+**原因**：用户认为计分系统太单一，只看两次消除间隔，未能体现棋盘大小、关卡系数、连击倍数、剩余时间奖励、提示/洗牌惩罚，导致排行榜分数可比性不强，希望丰富计分方案。
+
+**改动**：
+
+1. **`managers/score_manager.gd`**：
+   - 新增计分系数常量：`BASE_BOARD_PAIRS`、`DIFFICULTY_FACTOR_STEP`、`LEVEL_MULTIPLIER_STEP`、`COMBO_MULTIPLIER_STEP`、`HINT_PENALTY_BASE`、`SHUFFLE_PENALTY_BASE`、`TIME_BONUS_PER_SECOND`。
+   - 新增关卡参数变量：`_rows`、`_cols`、`_level`、`_difficulty`、`_pairs`。
+   - 新增 `setup_level(rows, cols, level, difficulty)`：在每次进入关卡时设置当前计分参数。
+   - 新增计分辅助函数：`_get_board_factor()`、`_get_difficulty_factor()`、`_get_level_multiplier()`、`_get_combo_multiplier(combo)`。
+   - 重写 `record_elimination()`：
+	 - 保留速度基础分（10/12/15/20/30）；
+	 - 最终得分 = 速度分 × 棋盘大小系数 × 难度系数 × 关卡系数 × 连击系数；
+	 - 返回结果增加各系数字段，便于调试/展示。
+   - 新增 `apply_hint_penalty()`：使用提示时扣分，公式为 `30 × 难度系数 × 关卡系数`。
+   - 新增 `apply_shuffle_penalty()`：洗牌时扣分，公式为 `80 × 难度系数 × 关卡系数`。
+   - 新增 `add_level_completion_bonus()`：关卡完成时根据剩余时间奖励分数，公式为 `remaining_time × 3 × 难度系数 × 关卡系数`。
+   - 更新 `get_state()` / `restore_state()`：保存/恢复关卡计分参数。
+   - 更新 `reset()`：新游戏时重置关卡计分参数。
+   - 将 `get_score_tier_color(points)` 改为 `get_score_tier_color(time_since_last)`：由于分数受多系数影响，按消除速度分级更稳定。
+
+2. **`game.gd`**：
+   - 在 `restart_game()` 中调用 `score_manager.setup_level(...)`，传入当前棋盘行列数、关卡、难度。
+   - 在 `_on_hint_button_pressed()` 中调用 `score_manager.apply_hint_penalty()` 并刷新 UI。
+   - 在 `_on_shuffle_button_pressed()` 中调用 `score_manager.apply_shuffle_penalty()` 并刷新 UI。
+   - 在 `_on_level_complete()` 开头调用 `score_manager.add_level_completion_bonus()` 并刷新 UI。
+   - 修改 `_show_score_feedback()` 与 `_spawn_floating_score()` 签名，增加 `time_since_last` 参数，用于等级色判断。
+   - 修改 `_emphasize_score_label()` 签名，增加 `time_since_last` 参数。
+   - 在 `_show_score_feedback()` 中连接对 `_emphasize_score_label()` 的调用，使分数标签在每次消除时脉冲变色。
+
+**影响位置**：
+
+- `managers/score_manager.gd` 第 6–56 行：新增常量与变量。
+- `managers/score_manager.gd` 第 58–67 行：`reset()` 更新。
+- `managers/score_manager.gd` 第 70–110 行：新增 `setup_level()` 与各系数函数。
+- `managers/score_manager.gd` 第 113–165 行：`record_elimination()` 重写。
+- `managers/score_manager.gd` 第 168–190 行：新增提示/洗牌惩罚与时间奖励。
+- `managers/score_manager.gd` 第 193–215 行：`restore_state()` 更新。
+- `managers/score_manager.gd` 第 218–231 行：`get_state()` 更新。
+- `managers/score_manager.gd` 第 247–257 行：`get_score_tier_color()` 更新。
+- `game.gd` 第 1266–1268 行：`restart_game()` 中新增 `setup_level()`。
+- `game.gd` 第 1371–1387 行：`_emphasize_score_label()` 与 `_show_score_feedback()` 更新。
+- `game.gd` 第 1414–1452 行：`_spawn_floating_score()` 更新。
+- `game.gd` 第 1544 行：调用 `_show_score_feedback()` 时传入 `time_since_last`。
+- `game.gd` 第 1665–1673 行：`_on_hint_button_pressed()` 增加扣分。
+- `game.gd` 第 1706–1717 行：`_on_shuffle_button_pressed()` 增加扣分。
+- `game.gd` 第 363–370 行：`_on_level_complete()` 增加时间奖励。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中对比不同难度/关卡：
+  - 高级、高关卡、大连击下消除获得更高分数；
+  - 使用提示/洗牌后分数下降；
+  - 关卡完成时剩余时间越多，奖励分数越高；
+  - 排行榜分数更能反映玩家综合表现。
+
+
+## 2026-07-26 04:35
+
+**原因**：用户要求更新菜单栏“帮助 > 积分规则”中的说明文字，以匹配新计分方案。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 更新 `_on_help_menu_item_pressed()` 中 index 3（积分规则）的文本内容，完整说明新的计分公式与各项系数：
+	 - 每次消除得分 = 速度基础分 × 棋盘大小系数 × 难度系数 × 关卡系数 × 连击系数；
+	 - 速度基础分按消除间隔分级；
+	 - 棋盘大小系数、难度系数、关卡系数、连击系数的计算方式；
+	 - 关卡完成奖励、提示扣分、洗牌扣分的计算方式。
+
+**影响位置**：
+
+- `game.gd` 第 992–1003 行：积分规则弹窗文本。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中点击“帮助 > 积分规则”，确认弹窗内容与新计分方案一致。
+
+
+## 2026-07-26 04:55
+
+**原因**：用户反馈游戏结束/关卡完成面板只有一个 Label 显示文字，缺乏按钮，建议增加“下一关”、“重玩本关”、“返回主菜单”、“查看排行榜”。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 重构 `CanvasLayer/GameOverPanel`：
+	 - 内部改为 `VBoxContainer`，包含标题 `GameOverLabel`、统计 `GameOverStatsLabel`、按钮容器 `ButtonContainer`。
+	 - 新增 4 个按钮：`NextLevelButton`（下一关/再玩一次）、`ReplayLevelButton`（重玩本关）、`ViewLeaderboardButton`（查看排行榜）、`ReturnToMenuButton`（返回主菜单）。
+	 - 面板尺寸从 240×150 扩大到 320×380，以容纳按钮。
+
+2. **`game.gd`**：
+   - 新增节点引用：`game_over_stats_label`、`next_level_button`、`replay_level_button`、`view_leaderboard_button`、`return_to_menu_button`。
+   - 新增状态变量 `_return_to_game_over_panel`：用于从游戏结束面板打开排行榜后，关闭排行榜时返回原面板。
+   - 在 `_ready()` 中连接 4 个按钮的 `pressed` 信号，并禁用焦点避免空格误触。
+   - 重写 `_display_final_victory_label()`：显示通关标题、总分/总用时统计，配置 4 个按钮（“下一关”改为“再玩一次”）。
+   - 重写 `_on_time_up()`：显示时间结束面板、当前分数，隐藏“下一关”按钮。
+   - 重写 `_show_level_complete_dialog()`：改用 `GameOverPanel` 显示关卡完成信息（当前关卡、下一关、分数、本关用时）和 4 个按钮。
+   - 新增按钮回调：
+	 - `_on_next_level_button_pressed()`：普通关卡进入下一关，最终通关后从第 1 关重新开始。
+	 - `_on_replay_level_button_pressed()`：重玩当前关卡。
+	 - `_on_view_leaderboard_button_pressed()`：隐藏面板，打开排行榜，关闭后返回面板。
+	 - `_on_return_to_menu_button_pressed()`：返回第 1 关并显示欢迎弹窗。
+   - 更新 `_hide_custom_dialog()`：关闭排行榜时若 `_return_to_game_over_panel` 为真，则重新显示 `GameOverPanel`。
+
+**影响位置**：
+
+- `game.tscn` 第 646–697 行：`GameOverPanel` 节点结构。
+- `game.gd` 第 100–103 行：新增 `_return_to_game_over_panel` 变量。
+- `game.gd` 第 159–166 行：新增节点引用。
+- `game.gd` 第 238–251 行：按钮信号连接。
+- `game.gd` 第 430–438 行：`_display_final_victory_label()` 重写。
+- `game.gd` 第 1253–1264 行：`_on_time_up()` 重写。
+- `game.gd` 第 617–637 行：`_show_level_complete_dialog()` 重写。
+- `game.gd` 第 650–677 行：新增按钮回调函数。
+- `game.gd` 第 1132–1145 行：`_hide_custom_dialog()` 更新。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中测试：
+  - 普通关卡完成后显示“下一关”等 4 个按钮；
+  - 最终通关后显示“再玩一次”等 4 个按钮；
+  - 时间结束后显示“重玩本关”、“查看排行榜”、“返回主菜单”3 个按钮；
+  - 点击“查看排行榜”可正常打开排行榜，关闭后返回游戏结束面板；
+  - 点击“返回主菜单”后显示欢迎弹窗，关闭后从第 1 关开始。
+
+
+## 2026-07-26 05:30
+
+**原因**：用户希望增加三种新玩法模式：挑战模式（2 分钟刷分）、无尽模式（消除后上方下落新牌）、每日挑战（固定 Seed，玩家比拼分数/用时）。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 扩展 `GameMode` 枚举，新增 `CHALLENGE`、`ENDLESS`、`DAILY`。
+   - 模式选择菜单新增“挑战模式”、“无尽模式”、“每日挑战”三个选项，并更新勾选逻辑。
+   - 新增 `_get_daily_seed()`：根据系统日期生成固定 Seed。
+   - 重写 `restart_game()` 开头，按模式初始化：
+	 - 挑战模式：`max_time = 120`，`time_bonus_enabled = false`，随机 Seed。
+	 - 无尽模式：`max_time = 60`，`time_bonus_enabled = true`，随机 Seed，`current_level = 1`。
+	 - 每日挑战：`max_time = 60`，`time_bonus_enabled = true`，Seed = 日期 Seed + 关卡。
+   - 更新 `_on_level_complete()`：挑战模式清空棋盘后立即生成新棋盘继续刷分，不显示关卡完成面板。
+   - 更新消除流程：无尽模式在坍塌后调用 `board_manager.drop_tiles()` 补充新牌。
+   - 更新 `_on_time_up()`：挑战模式时间到显示“挑战结束”与最终得分，并提供“再玩一次”按钮。
+   - 更新 `_update_level_info()`：挑战/无尽/每日模式显示对应模式名称。
+   - 更新 `_update_ui()` 与 `_update_button_texts()`：非竞技模式（含新三种模式）提示/洗牌不限制次数。
+   - 更新欢迎弹窗与帮助菜单“模式说明”文本，介绍新三种模式规则。
+
+2. **`managers/score_manager.gd`**：
+   - 新增常量 `CHALLENGE_TIME := 120.0`。
+   - 新增变量 `max_time` 与 `time_bonus_enabled`。
+   - `reset()`、`record_elimination()`、进度条更新逻辑改用 `max_time`。
+   - `get_state()` / `restore_state()` 保存/恢复 `max_time` 与 `time_bonus_enabled`。
+
+3. **`managers/board_manager.gd`**：
+   - 新增 `_rng: RandomNumberGenerator` 与 `set_seed()` / `randomize_seed()` / `_shuffle_array()`，支持可控随机 Seed（每日挑战）。
+   - 将原有 `randi()` 与 `Array.shuffle()` 替换为 `_rng` 版本。
+   - 新增 `drop_tiles(tile_count)`：实现无尽模式重力下沉并成对填充顶部空位。
+
+**影响位置**：
+
+- `game.gd` 第 6 行：`GameMode` 枚举。
+- `game.gd` 第 844–858 行：模式菜单扩展。
+- `game.gd` 第 949–965 行：模式选择处理。
+- `game.gd` 第 588 行：`_get_max_level_for_difficulty()` 旁新增 `_get_daily_seed()`。
+- `game.gd` 第 1340–1378 行：`restart_game()` 模式初始化。
+- `game.gd` 第 382–402 行：`_on_level_complete()` 处理挑战模式。
+- `game.gd` 第 1644–1647 行：无尽模式消除后下落新牌。
+- `game.gd` 第 1280–1295 行：`_on_time_up()` 区分挑战模式。
+- `game.gd` 第 308–322 行：`_update_level_info()` 模式显示。
+- `game.gd` 第 1929–1945 行：`_update_ui()` 与 `_update_button_texts()`。
+- `managers/score_manager.gd` 第 7、32–35 行：新常量与变量。
+- `managers/score_manager.gd` 第 58–67 行：`reset()` 更新。
+- `managers/score_manager.gd` 第 160–165 行：`record_elimination()` 时间奖励条件。
+- `managers/score_manager.gd` 第 200–231 行：`get_state()` / `restore_state()` 更新。
+- `managers/board_manager.gd` 第 6–30 行：RNG 相关函数。
+- `managers/board_manager.gd` 第 196–307 行：`randi()` / `shuffle()` 替换。
+- `managers/board_manager.gd` 第 792–823 行：`drop_tiles()` 新增。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中测试：
+  - 切换五种模式均能正常开始；
+  - 挑战模式倒计时为 2 分钟，消除不增加时间，清空棋盘后立即生成新棋盘；
+  - 无尽模式每次消除后上方补充新牌，棋盘始终充满；
+  - 每日挑战每天 Seed 固定，重新进入同一难度/关卡棋盘不变；
+  - 新模式下提示/洗牌可用且不消耗次数（但仍扣分数）。
+
+
+## 2026-07-26 05:45
+
+**原因**：用户认为菜单栏“帮助 > 模式说明”中的文字排版不够合理，希望重新排版。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 重写 `_on_help_menu_item_pressed()` 中“模式说明”弹窗的文本内容，使用 BBCode 改善排版：
+	 - 顶部居中显示“[模式说明]”大标题；
+	 - 每个模式名称使用 `[color=#5AB4E0][b]` 加粗着色；
+	 - 使用 `[indent]` 缩进说明内容；
+	 - 竞技模式次数规则改用项目符号 `•` 分行列出；
+	 - 关键数字（2 分钟）使用 `[color=#E07A82]` 高亮。
+
+**影响位置**：
+
+- `game.gd` 第 1076–1093 行：模式说明弹窗文本。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中点击“帮助 > 模式说明”，确认标题居中、各模式分段缩进、项目符号正常显示。
+
+
+## 2026-07-26 05:50
+
+**原因**：用户希望“帮助 > 模式说明”改为左右两竖列排版。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 将模式说明文本改为 `[table=2]` 两列布局：
+	 - 左列：休闲模式、竞技模式、挑战模式；
+	 - 右列：无尽模式、每日挑战，底部留一个空单元格保持视觉平衡。
+   - 保留标题居中、模式名加粗着色、竞技模式项目符号、关键数字高亮。
+
+**影响位置**：
+
+- `game.gd` 第 1076–1100 行：模式说明弹窗文本。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中点击“帮助 > 模式说明”，确认内容分为左右两列显示。
+
+
+## 2026-07-26 10:09
+
+**原因**：用户希望挑战模式时右上角不显示“总用时”和“本关用时”，改为显示倒计时。
+
+**改动**：
+
+1. **`game.gd`**：
+   - `_update_time_labels()`（第 1525 行附近）：判断 `current_mode == GameMode.CHALLENGE` 时，主界面顶部时间标签和紧凑顶部时间标签均显示 `[color=#8C5C33]倒计时：[/color][color=#FFF8F0]MM:SS[/color]`；其他模式保持原样显示总用时与本关用时。
+   - `_update_compact_ui()`（第 1377 行附近）：挑战模式下同样将紧凑时间标签改为倒计时，非挑战模式仍显示本关用时。
+
+**影响位置**：
+
+- `game.gd` 第 1377–1384 行：紧凑 UI 刷新。
+- `game.gd` 第 1525–1534 行：时间标签刷新。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中切换到挑战模式，确认顶部时间标签显示“倒计时”并随剩余时间减少。
+
+
+## 2026-07-26 10:13
+
+**原因**：用户希望玩家主动点击“洗牌”按钮（或快捷键/右键双击）时也能播放洗牌音效。
+
+**改动**：
+
+1. **`game.gd`**：
+   - `_on_shuffle_button_pressed()`（第 1888 行附近）：在扣除分数、更新 UI 后，调用 `audio_manager.play_sound(AudioManager.SHUFFLE_SOUND)`，再执行 `board_manager.shuffle_remaining()`。
+   - 死局自动洗牌逻辑本身已包含该音效，无需改动。
+
+**影响位置**：
+
+- `game.gd` 第 1908–1910 行：手动洗牌音效调用处。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行游戏，点击“洗牌”按钮或使用 X 键/右键双击，确认播放洗牌音效。
+
+
+## 2026-07-26 10:21
+
+**原因**：用户要求挑战模式成功消除时不增加时间（固定两分钟），并保留两种失败判定（进度条见底 / 两分钟总时长到限），且两种失败显示不同文字。
+
+**改动**：
+
+1. **`managers/score_manager.gd`**：
+   - 新增 `TimeUpReason` 枚举：`TIME_DEPLETED`（倒计时条耗尽）、`DURATION_LIMIT`（达到模式总时长上限）。
+   - 新增 `time_up_reason` 变量，记录本次时间到的具体原因；`reset()` 时重置为 `TIME_DEPLETED`。
+   - `update()` 中除 `remaining_time <= 0` 外，新增 `level_time >= max_time` 判定，并设置对应原因后触发 `time_up`。
+   - `record_elimination()` 中，仅在 `time_bonus_enabled` 为 `true` 时才给 `remaining_time` 增加 `TIME_BONUS`，挑战模式因此不再因消除而加时间。
+
+2. **`game.gd`**：
+   - `_on_time_up()`（第 1315 行附近）中，挑战模式下根据 `score_manager.time_up_reason` 显示不同失败文字：
+	 - `DURATION_LIMIT`：标题“挑战时间到”，说明“两分钟挑战已结束”。
+	 - `TIME_DEPLETED`：标题“时间耗尽”，说明“倒计时已见底，挑战失败”。
+   - 其他模式保持原有“时间结束”面板不变。
+
+**影响位置**：
+
+- `managers/score_manager.gd` 第 25–30 行：新增枚举与变量。
+- `managers/score_manager.gd` 第 58 行：`reset()` 重置原因。
+- `managers/score_manager.gd` 第 106–116 行：`update()` 双失败判定。
+- `managers/score_manager.gd` 第 164 行：时间奖励开关。
+- `game.gd` 第 1315–1338 行：失败面板文案分支。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中运行挑战模式，确认消除牌后倒计时不会增加，时间到后显示对应的失败文字。
+
+
+## 2026-07-26 10:29
+
+**原因**：用户希望“帮助 > 模式说明”弹窗去掉内容区重复的黄色小标题，并加大左右两列之间的间距。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 删除模式说明内容开头的黄色 `[color=#E0B45A][font_size=32][b]模式说明[/b]` 标题，仅保留弹窗窗口标题。
+   - 在两列表格中，为左列单元格增加右侧内边距 `[cell padding=0,0,30,0]`，右列单元格增加左侧内边距 `[cell padding=30,0,0,0]`，使左右两列内容间距明显加大。
+
+**影响位置**：
+
+- `game.gd` 第 1076–1103 行：模式说明弹窗文本。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中点击“帮助 > 模式说明”，确认内容区不再显示黄色“模式说明”小标题，且左右两列间距变大。
+
+
+## 2026-07-26 10:35
+
+**原因**：用户希望挑战模式两分钟倒计时结束时，优先显示“挑战时间到”文案。
+
+**改动**：
+
+1. **`managers/score_manager.gd`**：
+   - 调整 `update()` 中的时间到判定顺序：先检查 `level_time >= max_time`（总时长到限），再检查 `remaining_time <= 0`（倒计时条见底）。
+   - 当总时长到限时，将 `remaining_time` 限制为非负值后触发 `time_up`，并设置 `time_up_reason = DURATION_LIMIT`。
+   - 这样挑战模式在两分钟结束时，会优先进入 `DURATION_LIMIT` 分支，游戏面板显示“挑战时间到”。
+
+**影响位置**：
+
+- `managers/score_manager.gd` 第 105–127 行：时间到判定顺序。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误（退出时出现引擎资源泄漏警告，与本次逻辑改动无关）。
+- 建议在编辑器中运行挑战模式并等待两分钟，确认结束时显示“挑战时间到”。
+
+
+## 2026-07-26 10:43
+
+**原因**：模式说明增加左右两列内边距后，最左/最右侧文字被裁切，需要加宽弹窗。
+
+**改动**：
+
+1. **`game.gd`**：
+   - `_show_custom_dialog()`（第 1151 行附近）中，当弹窗类型为 `MODE_RULES` 时，将 `dialog_content.custom_minimum_size.x` 设为 1500；其他类型保持 1200。
+   - 这样两列表格加上 30px 的左右内边距后仍有足够宽度，避免边缘文字被裁切。
+
+**影响位置**：
+
+- `game.gd` 第 1168–1178 行：自定义弹窗内容区宽度设置。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中打开“帮助 > 模式说明”，确认左右两列文字完整显示，列间距保持较大。
+
+
+---
+
+## 2026-07-27 04:30
+
+**原因**：用户希望改进排行榜：按难度分别显示“总分榜”和“速通榜”；记录每关用时、提示/洗牌次数；并支持导出或分享成绩。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 新增 `LeaderboardType` 枚举：`SCORE`（总分榜）、`SPEEDRUN`（速通榜）。
+   - 扩展排行榜数据结构：每个难度键下改为 `{ "score": [...], "speedrun": [...] }`，并在 `_load_leaderboard()` 中兼容旧格式（旧值为数组时自动迁移）。
+   - 新增每关统计变量：`_session_level_stats`、`_level_hints_used`、`_level_shuffles_used`。
+   - 新增 `_commit_level_stat()`：关卡完成时把当前关的用时、提示、洗牌次数记录到 `_session_level_stats`。
+   - 修改 `restart_game()`：新开一局时清空 `_session_level_stats` 并重置当前关计数器。
+   - 修改 `_on_hint_button_pressed()` / `_on_shuffle_button_pressed()`：所有模式下均累加本关提示/洗牌计数。
+   - 重写 `_add_leaderboard_entry()`：构造含 `levels` 明细的完整记录，并分别插入当前难度的总分榜与速通榜；总分榜按分数降序，速通榜按总用时升序。
+   - 重写 `_get_leaderboard_page_text()`：支持按榜单类型生成表头与内容，并在每条记录下显示每关明细（用时·提示·洗牌）。
+   - 新增 `_format_level_details()`：把 `levels` 数组格式化为 `关N MM:SS·H·S`。
+   - 新增 `_on_leaderboard_type_pressed()`：切换总分榜/速通榜并重置到第 1 页。
+   - 更新 `_update_leaderboard_view()`、`_on_leaderboard_next_page_pressed()`：按当前榜单类型读取对应数组。
+   - 新增 `_get_current_leaderboard_entries()`：获取当前难度与榜单类型的记录数组。
+   - 新增 `_on_export_leaderboard_pressed()`：把当前榜单全部记录导出为文本，复制到系统剪贴板，并保存到 `user://leaderboard_export_<难度>_<类型>_<时间戳>.txt`。
+   - 新增 `_on_share_leaderboard_pressed()`：复制榜首成绩（含每关明细）到剪贴板。
+   - 新增 `_show_toast()`：在屏幕中央显示临时提示。
+   - 修改 `_show_leaderboard_dialog()`：默认显示总分榜。
+
+2. **`game.tscn`**：
+   - 在 `LeaderboardPanel` 中新增 `TypeRow`，含 `LeaderboardTypeScore`（总分榜）和 `LeaderboardTypeSpeedrun`（速通榜）两个按钮。
+   - 在 `LeaderboardPanel` 中新增 `ActionRow`，含 `ExportLeaderboardButton`（导出榜单）和 `ShareLeaderboardButton`（分享本条）两个按钮。
+   - 调整 `LeaderboardContent`：`scroll_active` 设为 `true`（支持滚动），字号略降以容纳更多明细内容。
+
+**影响位置**：
+
+- `game.gd` 第 52–55 行：新增 `LeaderboardType` 枚举。
+- `game.gd` 第 96–101 行：新增排行榜类型与每关统计变量。
+- `game.gd` 第 203–206 行：新增排行榜 UI 节点引用。
+- `game.gd` 第 230–237 行：新增按钮信号连接。
+- `game.gd` 第 279–282 行：新增按钮 `focus_mode` 设置。
+- `game.gd` 第 459–503 行：`_load_leaderboard()` 兼容新/旧格式。
+- `game.gd` 第 508–553 行：`_add_leaderboard_entry()` 写入双榜。
+- `game.gd` 第 555–605 行：`_get_leaderboard_page_text()` 与 `_format_level_details()`。
+- `game.gd` 第 607–700 行：排行榜视图刷新与类型切换。
+- `game.gd` 第 702–775 行：导出、分享与临时提示。
+- `game.gd` 第 391–418 行：`_on_level_complete()` 与 `_commit_level_stat()`。
+- `game.gd` 第 1448–1454 行：`restart_game()` 重置统计。
+- `game.gd` 第 1895–1902 行：提示计数。
+- `game.gd` 第 1944–1951 行：洗牌计数。
+- `game.tscn` 第 831–910 行：`LeaderboardPanel` 新增 `TypeRow`、`ActionRow` 与按钮节点，调整 `LeaderboardContent` 滚动与字号。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中测试：
+  - 旧版 `leaderboard.json` 能正确迁移为新结构。
+  - 最终通关后记录同时进入当前难度的总分榜与速通榜。
+  - 排行榜弹窗可切换“总分榜/速通榜”，表头与排序正确。
+  - 每条记录下显示每关用时、提示、洗牌次数。
+  - “导出榜单”按钮可复制到剪贴板并生成文件；“分享本条”可复制榜首成绩。
+
+
+---
+
+## 2026-07-29 07:33
+
+**原因**：修复挑战模式开发引入的 Bug：所有游戏模式都出现 1 分钟（60 秒）强制结束游戏的问题。
+
+**问题分析**：
+- 挑战模式需要固定 2 分钟总时长，因此在 `ScoreManager.update()` 中增加了 `level_time >= max_time` 判定，用于在两分钟总时长到限时触发 `DURATION_LIMIT` 时间到。
+- 但非挑战模式（休闲、竞技、无尽、每日）也将 `max_time` 设为 `ScoreManager.MAX_TIME`（60 秒），且 `level_time` 会持续增长，导致这些模式在 60 秒后也被错误地判定为时间到。
+
+**改动**：
+
+1. **`managers/score_manager.gd`**：
+   - 新增 `duration_limited: bool = false` 运行期变量，表示当前模式是否启用固定总时长判定。
+   - `reset()` 中重置 `duration_limited = false`。
+   - `update()` 中的总时长上限判定改为 `if duration_limited and level_time >= max_time:`，只有固定时长模式才会因本关用时达到上限而结束。
+   - `get_state()` / `restore_state()` 中保存与恢复 `duration_limited`，保证撤销/重做后状态一致。
+
+2. **`game.gd`**：
+   - 在 `restart_game()` 的模式初始化分支中显式设置 `score_manager.duration_limited`：
+	 - `GameMode.CHALLENGE`：`true`
+	 - `GameMode.ENDLESS`、`GameMode.DAILY`、其他模式：`false`
+
+**影响位置**：
+
+- `managers/score_manager.gd` 第 36 行：新增 `duration_limited` 变量。
+- `managers/score_manager.gd` 第 65 行：`reset()` 中重置该变量。
+- `managers/score_manager.gd` 第 114 行：`update()` 中加入 `duration_limited` 条件判断。
+- `managers/score_manager.gd` 第 228 行：`restore_state()` 中恢复该变量。
+- `managers/score_manager.gd` 第 249 行：`get_state()` 中保存该变量。
+- `game.gd` 第 1618–1637 行：`restart_game()` 各模式分支中设置 `score_manager.duration_limited`。
+
+**验证**：
+
+- 命令行 `--headless --quit` 加载无脚本错误。
+- 建议在编辑器中测试：
+  - 休闲/竞技/无尽/每日模式下游戏超过 60 秒不会强制结束，只有倒计时条 `remaining_time` 降到 0 时才结束。
+  - 挑战模式仍然在两分钟总时长到限时显示“挑战时间到”。
+
+
+---
+
+## 2026-07-29 07:38
+
+**原因**：用户希望在切换为挑战模式时，像游戏刚开始的欢迎弹窗一样显示文字提示，重点强调两分钟倒计时与无限棋盘机制。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 修复 `_hide_custom_dialog()` 中 `_dialog_callback` 只保存未被调用的问题：在关闭弹窗后、重置回调前增加 `if _dialog_callback.is_valid(): _dialog_callback.call()`，使弹窗支持“关闭后执行回调”。
+   - 修改 `_on_mode_menu_item_pressed()`：当切换到 `GameMode.CHALLENGE` 时，不再直接 `restart_game()`，而是先显示挑战模式介绍弹窗。
+   - 新增 `_show_challenge_intro_dialog()`：使用 `_show_custom_dialog()` 显示居中规则弹窗，内容包括：
+	 - 固定 **2 分钟** 倒计时
+	 - 消除 **不会恢复** 时间
+	 - 清空后立即生成 **新棋盘**，无限续关
+	 - 目标：在限时结束前挑战最高分
+	 - 关闭弹窗后通过回调调用 `restart_game()` 开始挑战模式。
+
+**影响位置**：
+
+- `game.gd` 第 1402–1415 行：`_hide_custom_dialog()` 增加回调调用。
+- `game.gd` 第 1183–1206 行：`_on_mode_menu_item_pressed()` 与新增 `_show_challenge_intro_dialog()`。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中点击「游戏 → 模式 → 挑战模式」，确认弹出介绍窗口，关闭后挑战模式正常开始。
+
+
+---
+
+## 2026-07-29 07:42
+
+**原因**：用户希望无尽模式与每日挑战模式也像挑战模式一样，在切换时显示介绍弹窗。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 修改 `_on_mode_menu_item_pressed()`：使用 `match` 区分四种需要介绍弹窗的模式：
+	 - `GameMode.CHALLENGE` → `_show_challenge_intro_dialog()`
+	 - `GameMode.ENDLESS` → 新增 `_show_endless_intro_dialog()`
+	 - `GameMode.DAILY` → 新增 `_show_daily_intro_dialog()`
+	 - 其他模式直接 `restart_game()`
+   - 新增 `_show_endless_intro_dialog()`：强调“每消除一对下落新牌、棋盘始终充满、倒计时结束即结束、挑战最高分”。
+   - 新增 `_show_daily_intro_dialog()`：强调“当日日期固定 Seed、所有玩家当天棋盘相同、通关后比拼分数与用时、每天一次机会”。
+   - 两个新弹窗均使用 `DialogType.RULES`，关闭后通过回调调用 `restart_game()`。
+
+**影响位置**：
+
+- `game.gd` 第 1183–1235 行：`_on_mode_menu_item_pressed()` 与三个模式介绍弹窗函数。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中分别点击「游戏 → 模式 → 无尽模式」和「游戏 → 模式 → 每日挑战」，确认弹出对应介绍窗口，关闭后 respective 模式正常开始。
+
+
+---
+
+## 2026-07-29 07:46
+
+**原因**：挑战/无尽/每日挑战三个模式的介绍弹窗中，内容区再次显示了黄色标题，与弹窗顶部标题重复。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 修改 `_show_challenge_intro_dialog()`、`_show_endless_intro_dialog()`、`_show_daily_intro_dialog()`：
+	 - 移除 `content` 开头的 `[color=#E0B45A][font_size=32][b]模式名[/b][/font_size][/color]` 黄色标题。
+	 - 保留 `[center]\n\n` 开头，使内容区与顶部标题保持适当间距。
+   - 同步将 `_show_challenge_intro_dialog()` 的标题与注释从“倒计时模式”统一回“挑战模式”。
+
+**影响位置**：
+
+- `game.gd` 第 1203–1230 行：三个模式介绍弹窗的内容字符串。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中切换挑战/无尽/每日挑战模式，确认弹窗只保留顶部一个标题，内容区不再出现黄色标题。
+
+
+---
+
+## 2026-07-29 07:50
+
+**原因**：用户希望将所有弹窗底部提示文字“点击任意位置或按任意键开始”统一加上括号。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 使用全文替换，将 4 处 `"点击任意位置或按任意键开始"` 改为 `"(点击任意位置或按任意键开始)"`。
+   - 涉及位置：
+	 - 第 842 行：欢迎弹窗
+	 - 第 1210 行：挑战模式介绍弹窗
+	 - 第 1220 行：无尽模式介绍弹窗
+	 - 第 1230 行：每日挑战介绍弹窗
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中打开欢迎弹窗及三个模式介绍弹窗，确认底部提示已带括号。
+
+
+---
+
+## 2026-07-29 07:54
+
+**原因**：用户希望休闲模式与竞技模式也加上规则介绍弹窗，且不要出现两个标题。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 修改 `_on_mode_menu_item_pressed()`：为 `GameMode.CASUAL` 和 `GameMode.COMPETITIVE` 增加弹窗分支，五个模式现在都会先显示介绍弹窗再开始游戏。
+   - 新增 `_show_casual_intro_dialog()`：
+	 - 提示与洗牌无限使用
+	 - 无分数压力，轻松练习
+	 - 适合熟悉规则与图案
+	 - 尽情享受消除乐趣
+   - 新增 `_show_competitive_intro_dialog()`：
+	 - 每关提示与洗牌次数有限
+	 - 第 1–7 关：5 次提示、2 次洗牌
+	 - 第 8–10 关：8 次提示、3 次洗牌
+	 - 次数用尽后对应按钮变灰
+   - 两个新弹窗均只保留 `_show_custom_dialog()` 传入的顶部标题，内容区不再额外显示黄色标题。
+
+**影响位置**：
+
+- `game.gd` 第 1183–1204 行：`_on_mode_menu_item_pressed()` 模式分发。
+- `game.gd` 第 1235–1260 行：新增 `_show_casual_intro_dialog()` 与 `_show_competitive_intro_dialog()`。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中点击「游戏 → 模式 → 休闲模式」和「游戏 → 模式 → 竞技模式」，确认弹出对应介绍窗口且只有一个标题，关闭后 respective 模式正常开始。
+
+
+---
+
+## 2026-07-29 07:58
+
+**原因**：用户希望休闲模式与竞技模式也加上规则介绍弹窗，且不要出现两个标题。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 修改 `_on_mode_menu_item_pressed()`：为 `GameMode.CASUAL` 和 `GameMode.COMPETITIVE` 增加弹窗分支，五个模式现在都会先显示介绍弹窗再开始游戏。
+   - 新增 `_show_casual_intro_dialog()`：
+	 - 提示与洗牌无限使用
+	 - 无分数压力，轻松练习
+	 - 适合熟悉规则与图案
+	 - 尽情享受消除乐趣
+   - 新增 `_show_competitive_intro_dialog()`：
+	 - 每关提示与洗牌次数有限
+	 - 第 1–7 关：5 次提示、2 次洗牌
+	 - 第 8–10 关：8 次提示、3 次洗牌
+	 - 次数用尽后对应按钮变灰
+   - 两个新弹窗均只保留 `_show_custom_dialog()` 传入的顶部标题，内容区不再额外显示黄色标题。
+
+**影响位置**：
+
+- `game.gd` 第 1183–1204 行：`_on_mode_menu_item_pressed()` 模式分发。
+- `game.gd` 第 1235–1260 行：新增 `_show_casual_intro_dialog()` 与 `_show_competitive_intro_dialog()`。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中点击「游戏 → 模式 → 休闲模式」和「游戏 → 模式 → 竞技模式」，确认弹出对应介绍窗口且只有一个标题，关闭后 respective 模式正常开始。

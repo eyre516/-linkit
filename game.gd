@@ -3,7 +3,7 @@ extends Control
 # 主游戏控制器：管理 UI 交互、菜单、弹窗、游戏流程与三个 Manager 的协作。
 
 enum GameState {PLAYING, GAME_OVER}
-enum GameMode {CASUAL, COMPETITIVE}
+enum GameMode {CASUAL, COMPETITIVE, CHALLENGE, ENDLESS, DAILY}
 
 # ------------------------------
 # 模块：游戏常量
@@ -51,6 +51,9 @@ enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, MODE_RULES, LEVE
 var _current_dialog_type: DialogType = DialogType.WELCOME
 var _dialog_callback: Callable = Callable()
 
+# 排行榜类型：总分榜按分数排序，速通榜按总用时排序
+enum LeaderboardType {SCORE, SPEEDRUN}
+
 # ------------------------------
 # 模块：游戏状态与运行数据
 # 说明：当前对局状态、选中索引、历史记录、竞技模式次数等
@@ -93,12 +96,21 @@ const LEADERBOARD_FILE := "user://leaderboard.json"
 # 排行榜弹窗当前查看的难度与页码（0 起始）
 var _leaderboard_difficulty: int = 1
 var _leaderboard_page: int = 0
+var _leaderboard_type: LeaderboardType = LeaderboardType.SCORE
 const LEADERBOARD_MAX_ENTRIES := 1000
 const LEADERBOARD_ENTRIES_PER_PAGE := 10
 const SETTINGS_FILE := "user://settings.json"
 
+# 本次通关的每关统计：关卡、用时、提示次数、洗牌次数
+var _session_level_stats: Array[Dictionary] = []
+var _level_hints_used: int = 0
+var _level_shuffles_used: int = 0
+
 # 关卡完成弹窗待进入的下一关
 var _pending_next_level: int = -1
+
+# 从游戏结束面板打开排行榜后，关闭排行榜时是否返回游戏结束面板
+var _return_to_game_over_panel: bool = false
 
 # 菜单栏相关的弹出菜单列表，用于判断鼠标是否在菜单交互区域
 var _popup_menus: Array[PopupMenu] = []
@@ -156,8 +168,13 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var score_gain_label: RichTextLabel = %ScoreGainLabel
 @onready var combo_label: RichTextLabel = %ComboLabel
 @onready var compact_combo_label: RichTextLabel = %CompactComboLabel
-@onready var game_over_label: Label = %GameOverLabel
 @onready var game_over_panel: PanelContainer = %GameOverPanel
+@onready var game_over_label: Label = %GameOverLabel
+@onready var game_over_stats_label: RichTextLabel = %GameOverStatsLabel
+@onready var next_level_button: Button = %NextLevelButton
+@onready var replay_level_button: Button = %ReplayLevelButton
+@onready var view_leaderboard_button: Button = %ViewLeaderboardButton
+@onready var return_to_menu_button: Button = %ReturnToMenuButton
 @onready var auto_shuffle_hint: Label = %AutoShuffleHint
 @onready var pause_label: Label = %PauseLabel
 @onready var pause_dim: ColorRect = %PauseDim
@@ -195,6 +212,10 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var leaderboard_tab_buttons: Array[Button] = [%LeaderboardTab1, %LeaderboardTab2, %LeaderboardTab3]
 @onready var leaderboard_prev_button: Button = %PrevPageButton
 @onready var leaderboard_next_button: Button = %NextPageButton
+@onready var leaderboard_type_score_button: Button = %LeaderboardTypeScore
+@onready var leaderboard_type_speedrun_button: Button = %LeaderboardTypeSpeedrun
+@onready var export_leaderboard_button: Button = %ExportLeaderboardButton
+@onready var share_leaderboard_button: Button = %ShareLeaderboardButton
 
 
 # 模块：生命周期 —— 初始化音频、棋盘、菜单与游戏
@@ -226,12 +247,27 @@ func _ready() -> void:
 	leaderboard_prev_button.pressed.connect(_on_leaderboard_prev_page_pressed)
 	leaderboard_next_button.pressed.connect(_on_leaderboard_next_page_pressed)
 	leaderboard_close_button.pressed.connect(_hide_custom_dialog)
+	leaderboard_type_score_button.pressed.connect(_on_leaderboard_type_pressed.bind(LeaderboardType.SCORE))
+	leaderboard_type_speedrun_button.pressed.connect(_on_leaderboard_type_pressed.bind(LeaderboardType.SPEEDRUN))
+	export_leaderboard_button.pressed.connect(_on_export_leaderboard_pressed)
+	share_leaderboard_button.pressed.connect(_on_share_leaderboard_pressed)
 
 	# 暂停菜单按钮
 	%ResumeButton.pressed.connect(_on_resume_button_pressed)
 	%RestartButton2.pressed.connect(_on_restart_button_pressed)
 	%SettingsButton.pressed.connect(_on_settings_button_pressed)
 	%CloseSettingsButton.pressed.connect(_on_close_settings_button_pressed)
+
+	# 游戏结束/关卡完成面板按钮
+	next_level_button.pressed.connect(_on_next_level_button_pressed)
+	replay_level_button.pressed.connect(_on_replay_level_button_pressed)
+	view_leaderboard_button.pressed.connect(_on_view_leaderboard_button_pressed)
+	return_to_menu_button.pressed.connect(_on_return_to_menu_button_pressed)
+	# 禁止按钮获得焦点，避免空格/回车误触
+	next_level_button.focus_mode = Control.FOCUS_NONE
+	replay_level_button.focus_mode = Control.FOCUS_NONE
+	view_leaderboard_button.focus_mode = Control.FOCUS_NONE
+	return_to_menu_button.focus_mode = Control.FOCUS_NONE
 
 	# 设置面板控件
 	master_slider.value_changed.connect(_on_master_volume_slider_changed)
@@ -261,6 +297,10 @@ func _ready() -> void:
 	%PrevPageButton.focus_mode = Control.FOCUS_NONE
 	%NextPageButton.focus_mode = Control.FOCUS_NONE
 	%LeaderboardCloseButton.focus_mode = Control.FOCUS_NONE
+	%LeaderboardTypeScore.focus_mode = Control.FOCUS_NONE
+	%LeaderboardTypeSpeedrun.focus_mode = Control.FOCUS_NONE
+	%ExportLeaderboardButton.focus_mode = Control.FOCUS_NONE
+	%ShareLeaderboardButton.focus_mode = Control.FOCUS_NONE
 
 	# 连击数变化时刷新连击显示（含超时自动清零）
 	score_manager.combo_changed.connect(func(_count: int) -> void: _update_combo_display())
@@ -293,7 +333,16 @@ func _update_level_info() -> void:
 		3: difficulty_name = "高级"
 	var level_total := 5 if current_difficulty == 1 else 10
 	difficulty_label.text = "[color=#8C5C33]难度：[/color][color=#264D61]%s[/color]" % difficulty_name
-	level_label.text = "[color=#8C5C33]关卡 %d/%d：[/color][color=#264D61]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
+
+	match current_mode:
+		GameMode.CHALLENGE:
+			level_label.text = "[color=#8C5C33]倒计时模式[/color]"
+		GameMode.ENDLESS:
+			level_label.text = "[color=#8C5C33]无尽模式[/color]"
+		GameMode.DAILY:
+			level_label.text = "[color=#8C5C33]每日挑战：[/color][color=#264D61]%s[/color]" % _get_level_name(current_level)
+		_:
+			level_label.text = "[color=#8C5C33]关卡 %d/%d：[/color][color=#264D61]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
 	_update_pairs_label()
 
 
@@ -361,9 +410,24 @@ func _advance_level() -> void:
 
 # 关卡完成后的统一处理
 func _on_level_complete() -> void:
+	# 根据剩余时间给予关卡完成奖励
+	score_manager.add_level_completion_bonus()
+	_update_score_label()
+	_update_compact_ui()
+
+	# 记录本关统计
+	_commit_level_stat()
+
 	# 播放胜利音效
 	audio_manager.play_sound(AudioManager.GAME_WON_SOUND)
 	_show_full_ui()
+	if current_mode == GameMode.CHALLENGE:
+		# 倒计时模式：清空棋盘后立即生成新棋盘，继续计时刷分
+		board_manager.generate_board()
+		board_manager.update_all_cells(selected_index)
+		_update_pairs_label()
+		_update_ui()
+		return
 	if _is_final_level():
 		# 最终关卡胜利时播放烟花庆祝
 		var fireworks := FIREWORKS_SCENE.instantiate()
@@ -371,6 +435,18 @@ func _on_level_complete() -> void:
 		_show_final_victory()
 	else:
 		_show_level_complete_dialog()
+
+
+# 记录当前关卡统计并重置计数器
+func _commit_level_stat() -> void:
+	_session_level_stats.append({
+		"level": current_level,
+		"time_seconds": score_manager.level_time,
+		"hints": _level_hints_used,
+		"shuffles": _level_shuffles_used,
+	})
+	_level_hints_used = 0
+	_level_shuffles_used = 0
 
 
 func _show_final_victory() -> void:
@@ -403,37 +479,49 @@ func _on_name_input_submitted(text: String) -> void:
 	_display_final_victory_label()
 
 
-# 显示最终胜利标签
+# 显示最终胜利面板
 func _display_final_victory_label() -> void:
-	if current_difficulty == 1:
-		game_over_label.text = "初级通关！\n总分：%d\n总用时：%s" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
-	elif current_difficulty == 2:
-		game_over_label.text = "中级通关！\n总分：%d\n总用时：%s" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
-	else:
-		game_over_label.text = "高级通关！\n总分：%d\n总用时：%s" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
+	var diff_name := "初级" if current_difficulty == 1 else ("中级" if current_difficulty == 2 else "高级")
+	game_over_label.text = "%s通关成功！" % diff_name
+	game_over_stats_label.text = "[color=#FFF8F0]总分：[/color][color=#E07A82]%d[/color]\n[color=#FFF8F0]总用时：[/color][color=#5AB4E0]%s[/color]" % [score_manager.score, ScoreManager.format_time(score_manager.total_game_time)]
+	next_level_button.text = "再玩一次"
+	next_level_button.show()
+	replay_level_button.show()
+	view_leaderboard_button.show()
+	return_to_menu_button.show()
 	game_over_panel.show()
 
 
 # 模块：排行榜 —— 加载本地排行榜数据
 func _load_leaderboard() -> void:
 	if not FileAccess.file_exists(LEADERBOARD_FILE):
-		_leaderboard_data = {"1": [], "2": [], "3": []}
+		_leaderboard_data = {"1": {"score": [], "speedrun": []}, "2": {"score": [], "speedrun": []}, "3": {"score": [], "speedrun": []}}
 		return
 	var file := FileAccess.open(LEADERBOARD_FILE, FileAccess.READ)
 	if file == null:
-		_leaderboard_data = {"1": [], "2": [], "3": []}
+		_leaderboard_data = {"1": {"score": [], "speedrun": []}, "2": {"score": [], "speedrun": []}, "3": {"score": [], "speedrun": []}}
 		return
 	var json := JSON.new()
 	var error := json.parse(file.get_as_text())
 	file.close()
 	if error != OK:
-		_leaderboard_data = {"1": [], "2": [], "3": []}
+		_leaderboard_data = {"1": {"score": [], "speedrun": []}, "2": {"score": [], "speedrun": []}, "3": {"score": [], "speedrun": []}}
 		return
 	var data = json.data
 	if data is Dictionary:
 		_leaderboard_data = data
+		# 兼容旧格式：值为数组时自动转换为 {score: 旧数组, speedrun: []}
+		for key in _leaderboard_data.keys():
+			var value = _leaderboard_data[key]
+			if value is Array:
+				_leaderboard_data[key] = {"score": value, "speedrun": []}
+			elif value is Dictionary:
+				if not value.has("score") or not (value["score"] is Array):
+					value["score"] = []
+				if not value.has("speedrun") or not (value["speedrun"] is Array):
+					value["speedrun"] = []
 	else:
-		_leaderboard_data = {"1": [], "2": [], "3": []}
+		_leaderboard_data = {"1": {"score": [], "speedrun": []}, "2": {"score": [], "speedrun": []}, "3": {"score": [], "speedrun": []}}
 
 
 # 模块：排行榜 —— 保存排行榜数据到本地
@@ -448,36 +536,64 @@ func _save_leaderboard() -> void:
 # 模块：排行榜 —— 添加一条新记录并排序截断
 func _add_leaderboard_entry(player_name: String) -> void:
 	var key := str(current_difficulty)
-	if not _leaderboard_data.has(key) or not (_leaderboard_data[key] is Array):
-		_leaderboard_data[key] = []
-	var entries: Array = _leaderboard_data[key]
+	if not _leaderboard_data.has(key) or not (_leaderboard_data[key] is Dictionary):
+		_leaderboard_data[key] = {"score": [], "speedrun": []}
+	var diff_data: Dictionary = _leaderboard_data[key]
+	if not diff_data.has("score") or not (diff_data["score"] is Array):
+		diff_data["score"] = []
+	if not diff_data.has("speedrun") or not (diff_data["speedrun"] is Array):
+		diff_data["speedrun"] = []
+
 	var date_dict := Time.get_datetime_dict_from_system()
 	var date_str := "%04d-%02d-%02d %02d:%02d" % [date_dict.year, date_dict.month, date_dict.day, date_dict.hour, date_dict.minute]
-	entries.append({
+	var entry := {
 		"name": player_name,
 		"date": date_str,
 		"time": ScoreManager.format_time(score_manager.total_game_time),
 		"time_seconds": int(score_manager.total_game_time),
-		"score": score_manager.score
-	})
-	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		"score": score_manager.score,
+		"levels": _session_level_stats.duplicate(true)
+	}
+
+	# 总分榜：分数降序 -> 用时升序 -> 日期降序
+	var score_entries: Array = diff_data["score"]
+	score_entries.append(entry.duplicate(true))
+	score_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if a["score"] != b["score"]:
 			return a["score"] > b["score"]
 		if a["time_seconds"] != b["time_seconds"]:
 			return a["time_seconds"] < b["time_seconds"]
 		return a["date"] > b["date"]
 	)
-	if entries.size() > LEADERBOARD_MAX_ENTRIES:
-		entries.resize(LEADERBOARD_MAX_ENTRIES)
+	if score_entries.size() > LEADERBOARD_MAX_ENTRIES:
+		score_entries.resize(LEADERBOARD_MAX_ENTRIES)
+
+	# 速通榜：总用时升序 -> 分数降序 -> 日期降序
+	var speedrun_entries: Array = diff_data["speedrun"]
+	speedrun_entries.append(entry.duplicate(true))
+	speedrun_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["time_seconds"] != b["time_seconds"]:
+			return a["time_seconds"] < b["time_seconds"]
+		if a["score"] != b["score"]:
+			return a["score"] > b["score"]
+		return a["date"] > b["date"]
+	)
+	if speedrun_entries.size() > LEADERBOARD_MAX_ENTRIES:
+		speedrun_entries.resize(LEADERBOARD_MAX_ENTRIES)
 
 
-# 模块：排行榜 —— 格式化指定难度与页码的排行榜字符串
-func _get_leaderboard_page_text(difficulty: int, page: int) -> String:
+# 模块：排行榜 —— 格式化指定难度、榜单类型与页码的排行榜字符串
+func _get_leaderboard_page_text(difficulty: int, page: int, board_type: LeaderboardType = LeaderboardType.SCORE) -> String:
 	var key := str(difficulty)
-	var raw_entries = _leaderboard_data.get(key, [])
+	var diff_data = _leaderboard_data.get(key, {"score": [], "speedrun": []})
+	if not (diff_data is Dictionary):
+		diff_data = {"score": [], "speedrun": []}
+	var board_key := "score" if board_type == LeaderboardType.SCORE else "speedrun"
+	var raw_entries = diff_data.get(board_key, [])
 	var entries: Array = raw_entries if raw_entries is Array else []
 	var diff_name := "初级" if difficulty == 1 else ("中级" if difficulty == 2 else "高级")
-	var content := "[center][color=#E0B45A][b]%s排行榜（%d 关）[/b][/color][/center]\n\n" % [diff_name, _get_max_level_for_difficulty(difficulty)]
+	var type_name := "总分榜" if board_type == LeaderboardType.SCORE else "速通榜"
+	var content := "[center][color=#E0B45A][b]%s（%d 关）—— %s[/b][/color][/center]\n\n" % [diff_name, _get_max_level_for_difficulty(difficulty), type_name]
 	if entries.is_empty():
 		content += "[center]暂无记录[/center]"
 		return content
@@ -493,37 +609,71 @@ func _get_leaderboard_page_text(difficulty: int, page: int) -> String:
 	table += "[cell][color=%s][b]排名[/b][/color][/cell]" % HEADER_COLOR
 	table += "[cell][color=%s][b]姓名[/b][/color][/cell]" % HEADER_COLOR
 	table += "[cell][color=%s][b]日期[/b][/color][/cell]" % HEADER_COLOR
-	table += "[cell][color=%s][b]用时[/b][/color][/cell]" % HEADER_COLOR
-	table += "[cell][color=%s][b]分数[/b][/color][/cell]" % HEADER_COLOR
+	if board_type == LeaderboardType.SCORE:
+		table += "[cell][color=%s][b]用时[/b][/color][/cell]" % HEADER_COLOR
+		table += "[cell][color=%s][b]分数[/b][/color][/cell]" % HEADER_COLOR
+	else:
+		table += "[cell][color=%s][b]总用时[/b][/color][/cell]" % HEADER_COLOR
+		table += "[cell][color=%s][b]分数[/b][/color][/cell]" % HEADER_COLOR
 	for i in range(start_index, end_index):
 		var entry: Dictionary = entries[i]
 		table += "[cell]%d[/cell][cell]%s[/cell][cell]%s[/cell][cell]%s[/cell][cell]%d[/cell]" % [i + 1, entry["name"], entry["date"], entry["time"], entry["score"]]
 	table += "[/table][/center]\n"
 	content += table
+
+	# 每关明细：用时 / 提示 / 洗牌
+	for i in range(start_index, end_index):
+		var entry: Dictionary = entries[i]
+		if entry.has("levels"):
+			var details := _format_level_details(entry["levels"])
+			if not details.is_empty():
+				content += "\n[center][font_size=22][color=#B0B0B0]%d. %s[/color][/font_size][/center]" % [i + 1, details]
+
 	return content
+
+
+# 将每关明细格式化为 "关1 0:12·0·0 | 关2 0:09·1·0 | ..."
+func _format_level_details(levels: Array) -> String:
+	var parts: Array[String] = []
+	for level_data in levels:
+		if level_data is Dictionary:
+			var level_num: int = level_data.get("level", 0)
+			var time_sec: float = level_data.get("time_seconds", 0.0)
+			var hints: int = level_data.get("hints", 0)
+			var shuffles: int = level_data.get("shuffles", 0)
+			parts.append("关%d %s·%d·%d" % [level_num, ScoreManager.format_time(time_sec), hints, shuffles])
+	return " | ".join(parts)
 
 
 # 模块：排行榜 —— 显示带标签页与分页的排行榜弹窗
 func _show_leaderboard_dialog() -> void:
 	_leaderboard_difficulty = 1
 	_leaderboard_page = 0
+	_leaderboard_type = LeaderboardType.SCORE
 	_update_leaderboard_view()
 	_show_custom_dialog(DialogType.LEADERBOARD, "排行榜", "")
 
 
-# 模块：排行榜 —— 刷新当前难度/页码的视图与按钮状态
+# 模块：排行榜 —— 刷新当前难度/榜单类型/页码的视图与按钮状态
 func _update_leaderboard_view() -> void:
 	var key := str(_leaderboard_difficulty)
-	var raw_entries = _leaderboard_data.get(key, [])
+	var diff_data = _leaderboard_data.get(key, {"score": [], "speedrun": []})
+	if not (diff_data is Dictionary):
+		diff_data = {"score": [], "speedrun": []}
+	var board_key := "score" if _leaderboard_type == LeaderboardType.SCORE else "speedrun"
+	var raw_entries = diff_data.get(board_key, [])
 	var entries: Array = raw_entries if raw_entries is Array else []
 	var total_pages := maxi(1, ceili(float(entries.size()) / LEADERBOARD_ENTRIES_PER_PAGE))
 	_leaderboard_page = clampi(_leaderboard_page, 0, total_pages - 1)
 
-	leaderboard_content.text = _get_leaderboard_page_text(_leaderboard_difficulty, _leaderboard_page)
+	leaderboard_content.text = _get_leaderboard_page_text(_leaderboard_difficulty, _leaderboard_page, _leaderboard_type)
 	leaderboard_page_label.text = "第 %d 页 / 共 %d 页" % [_leaderboard_page + 1, total_pages]
 
 	for i in range(leaderboard_tab_buttons.size()):
 		leaderboard_tab_buttons[i].disabled = (i + 1 == _leaderboard_difficulty)
+
+	leaderboard_type_score_button.disabled = (_leaderboard_type == LeaderboardType.SCORE)
+	leaderboard_type_speedrun_button.disabled = (_leaderboard_type == LeaderboardType.SPEEDRUN)
 
 	leaderboard_prev_button.disabled = (_leaderboard_page == 0)
 	leaderboard_next_button.disabled = (_leaderboard_page >= total_pages - 1)
@@ -548,7 +698,11 @@ func _on_leaderboard_prev_page_pressed() -> void:
 # 模块：排行榜 —— 下一页
 func _on_leaderboard_next_page_pressed() -> void:
 	var key := str(_leaderboard_difficulty)
-	var raw_entries = _leaderboard_data.get(key, [])
+	var diff_data = _leaderboard_data.get(key, {"score": [], "speedrun": []})
+	if not (diff_data is Dictionary):
+		diff_data = {"score": [], "speedrun": []}
+	var board_key := "score" if _leaderboard_type == LeaderboardType.SCORE else "speedrun"
+	var raw_entries = diff_data.get(board_key, [])
 	var entries: Array = raw_entries if raw_entries is Array else []
 	var total_pages := maxi(1, ceili(float(entries.size()) / LEADERBOARD_ENTRIES_PER_PAGE))
 	if _leaderboard_page < total_pages - 1:
@@ -556,9 +710,113 @@ func _on_leaderboard_next_page_pressed() -> void:
 		_update_leaderboard_view()
 
 
+# 模块：排行榜 —— 切换总分榜 / 速通榜
+func _on_leaderboard_type_pressed(type: LeaderboardType) -> void:
+	if _leaderboard_type == type:
+		return
+	_leaderboard_type = type
+	_leaderboard_page = 0
+	_update_leaderboard_view()
+
+
+# 模块：排行榜 —— 获取当前榜单的记录数组
+func _get_current_leaderboard_entries() -> Array:
+	var key := str(_leaderboard_difficulty)
+	var diff_data = _leaderboard_data.get(key, {"score": [], "speedrun": []})
+	if not (diff_data is Dictionary):
+		return []
+	var board_key := "score" if _leaderboard_type == LeaderboardType.SCORE else "speedrun"
+	var raw_entries = diff_data.get(board_key, [])
+	return raw_entries if raw_entries is Array else []
+
+
+# 模块：排行榜 —— 导出榜单到文件并复制到剪贴板
+func _on_export_leaderboard_pressed() -> void:
+	var entries := _get_current_leaderboard_entries()
+	var diff_name := "初级" if _leaderboard_difficulty == 1 else ("中级" if _leaderboard_difficulty == 2 else "高级")
+	var type_name := "总分榜" if _leaderboard_type == LeaderboardType.SCORE else "速通榜"
+
+	var lines: Array[String] = []
+	lines.append("连连看排行榜 — %s — %s" % [diff_name, type_name])
+	lines.append("")
+	lines.append("排名\t姓名\t日期\t\t用时\t分数")
+	if entries.is_empty():
+		lines.append("暂无记录")
+	else:
+		for i in range(entries.size()):
+			var entry: Dictionary = entries[i]
+			lines.append("%d\t%s\t%s\t%s\t%d" % [i + 1, entry["name"], entry["date"], entry["time"], entry["score"]])
+			if entry.has("levels"):
+				lines.append("  每关明细: %s" % _format_level_details(entry["levels"]))
+
+	var full_text := "\n".join(lines)
+
+	# 复制到剪贴板
+	DisplayServer.clipboard_set(full_text)
+
+	# 同时写入用户目录文件
+	var date_dict := Time.get_datetime_dict_from_system()
+	var timestamp := "%04d%02d%02d_%02d%02d" % [date_dict.year, date_dict.month, date_dict.day, date_dict.hour, date_dict.minute]
+	var file_name := "leaderboard_export_%s_%s_%s.txt" % [diff_name, type_name, timestamp]
+	var file_path := "user://" + file_name
+	var file := FileAccess.open(file_path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(full_text)
+		file.close()
+
+	# 用临时提示标签反馈结果
+	_show_toast("榜单已导出并复制到剪贴板\n文件：%s" % file_path)
+
+
+# 模块：排行榜 —— 分享当前榜单的第一条记录到剪贴板
+func _on_share_leaderboard_pressed() -> void:
+	var entries := _get_current_leaderboard_entries()
+	if entries.is_empty():
+		_show_toast("当前榜单暂无记录")
+		return
+
+	var entry: Dictionary = entries[0]
+	var diff_name := "初级" if _leaderboard_difficulty == 1 else ("中级" if _leaderboard_difficulty == 2 else "高级")
+	var type_name := "总分榜" if _leaderboard_type == LeaderboardType.SCORE else "速通榜"
+	var share_text := "【连连看 %s %s 第1名】\n玩家：%s\n分数：%d\n用时：%s\n日期：%s" % [diff_name, type_name, entry["name"], entry["score"], entry["time"], entry["date"]]
+	if entry.has("levels"):
+		share_text += "\n每关明细：%s" % _format_level_details(entry["levels"])
+	DisplayServer.clipboard_set(share_text)
+	_show_toast("已复制榜首成绩到剪贴板")
+
+
+# 在屏幕中央显示一个临时提示（toast）
+func _show_toast(message: String) -> void:
+	var toast := Label.new()
+	toast.text = message
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	toast.add_theme_font_size_override("font_size", 28)
+	toast.add_theme_color_override("font_outline_color", Color.BLACK)
+	toast.add_theme_constant_override("outline_size", 5)
+	toast.anchors_preset = Control.PRESET_CENTER
+	toast.offset_left = -300
+	toast.offset_top = -60
+	toast.offset_right = 300
+	toast.offset_bottom = 60
+	add_child(toast)
+
+	var tween := create_tween()
+	tween.tween_property(toast, "modulate:a", 0.0, 2.0).set_delay(0.5)
+	tween.finished.connect(func() -> void:
+		toast.queue_free()
+	)
+
+
 # 获取指定难度下的最大关卡数
 func _get_max_level_for_difficulty(difficulty: int) -> int:
 	return 5 if difficulty == 1 else 10
+
+
+# 获取今日日期对应的 Seed（用于每日挑战）
+func _get_daily_seed() -> int:
+	var date := Time.get_date_dict_from_system()
+	return date.year * 10000 + date.month * 100 + date.day
 
 
 # 显示欢迎弹窗
@@ -569,25 +827,25 @@ func _show_welcome_dialog() -> void:
 	rule_text += "消除所有图案即可获胜。[/font_size][/color][/center]"
 
 	var must_read_text := "[center][color=#8B0000][font_size=30]【必看】[/font_size][/color]\n\n"
-	must_read_text += "[color=#660000][font_size=22]本游戏分竞技模式与休闲模式；[/font_size][/color]\n"
+	must_read_text += "[color=#660000][font_size=22]本游戏含”休闲、竞技、倒计时、无尽、每日挑战“\n五种模式；[/font_size][/color]\n"
 	must_read_text += "[color=#8B0000][font_size=24]鼠标双击暂停；右键单击提示，右键双击洗牌。[/font_size][/color][/center]"
 
 	var op_text := "[center][color=#E0B45A][font_size=28][b]【操作说明】[/b][/font_size][/color]\n\n"
 	op_text += "[color=#FFF8F0][font_size=22][color=#5AB4E0][b]T / 鼠标右键单击[/b][/color]：提示\n"
 	op_text += "[color=#5AB4E0][b]X / 鼠标右键双击[/b][/color]：洗牌\n"
-	op_text += "[color=#5AB4E0][b]空格键 / 双击[/b][/color]：暂停 / 继续\n"
+	op_text += "[color=#5AB4E0][b]双击 / 空格键 [/b][/color]：暂停 / 继续\n"
 	op_text += "[color=#5AB4E0][b]鼠标左键[/b][/color]：选择 / 消除[/font_size][/color][/center]"
 
 	welcome_rule_label.text = rule_text
 	welcome_must_read_label.text = must_read_text
 	welcome_op_label.text = op_text
-	_show_custom_dialog(DialogType.WELCOME, "欢迎游玩连连看", "", "点击任意位置或按任意键开始")
+	_show_custom_dialog(DialogType.WELCOME, "欢迎游玩连连看", "", "(点击任意位置或按任意键开始)")
 	welcome_panel.show()
 	dialog_content.hide()
 	_flash_dialog_hint()
 
 
-# 普通关卡完成弹窗
+# 普通关卡完成面板
 func _show_level_complete_dialog() -> void:
 	game_state = GameState.GAME_OVER
 	_timer_running = false
@@ -601,11 +859,17 @@ func _show_level_complete_dialog() -> void:
 		_roll_level4_direction()
 
 	var next_name := _get_level_name(_pending_next_level)
-	var content := "恭喜完成第 %d 关，下一关为 [color=#006400]%s[/color]\n" % [current_level, next_name]
-	_show_custom_dialog(DialogType.LEVEL_COMPLETE, "关卡完成", content)
+	game_over_label.text = "关卡完成"
+	game_over_stats_label.text = "[color=#FFF8F0]第 %d 关已完成\n下一关：[/color][color=#66ff66]%s[/color]\n[color=#FFF8F0]分数：[/color][color=#E07A82]%d[/color]\n[color=#FFF8F0]本关用时：[/color][color=#5AB4E0]%s[/color]" % [current_level, next_name, score_manager.score, ScoreManager.format_time(score_manager.level_time)]
+	next_level_button.text = "下一关"
+	next_level_button.show()
+	replay_level_button.show()
+	view_leaderboard_button.show()
+	return_to_menu_button.show()
+	game_over_panel.show()
 
 
-# 点击关卡完成弹窗的确定后进入下一关
+# 进入下一关
 func _on_level_complete_confirmed() -> void:
 	if _pending_next_level < 0:
 		return
@@ -613,6 +877,36 @@ func _on_level_complete_confirmed() -> void:
 	_pending_next_level = -1
 	_update_level_info()
 	restart_game(false)
+
+
+# 游戏结束/关卡完成面板：下一关 / 再玩一次
+func _on_next_level_button_pressed() -> void:
+	game_over_panel.hide()
+	if _is_final_level() or _pending_next_level < 0:
+		# 最终通关后“再玩一次”：从第 1 关重新开始
+		restart_game(true)
+	else:
+		_on_level_complete_confirmed()
+
+
+# 游戏结束/关卡完成面板：重玩本关
+func _on_replay_level_button_pressed() -> void:
+	game_over_panel.hide()
+	restart_game(false)
+
+
+# 游戏结束/关卡完成面板：查看排行榜
+func _on_view_leaderboard_button_pressed() -> void:
+	_return_to_game_over_panel = true
+	game_over_panel.hide()
+	_show_leaderboard_dialog()
+
+
+# 游戏结束/关卡完成面板：返回主菜单（显示欢迎弹窗）
+func _on_return_to_menu_button_pressed() -> void:
+	game_over_panel.hide()
+	restart_game(true)
+	_show_welcome_dialog()
 
 
 # 模块：设置 —— 从文件加载音量与开关状态
@@ -761,6 +1055,9 @@ func _setup_menus() -> void:
 	mode_popup.name = "ModeMenu"
 	mode_popup.add_check_item("休闲模式", 0)
 	mode_popup.add_check_item("竞技模式", 1)
+	mode_popup.add_check_item("倒计时模式", 2)
+	mode_popup.add_check_item("无尽模式", 3)
+	mode_popup.add_check_item("每日挑战", 4)
 	mode_popup.index_pressed.connect(_on_mode_menu_item_pressed)
 	game_popup.add_child(mode_popup)
 	game_popup.add_submenu_item("模式", "ModeMenu", 0)
@@ -885,9 +1182,74 @@ func _on_game_menu_item_pressed(index: int) -> void:
 
 # 处理模式选择子菜单
 func _on_mode_menu_item_pressed(index: int) -> void:
-	current_mode = GameMode.CASUAL if index == 0 else GameMode.COMPETITIVE
+	match index:
+		0: current_mode = GameMode.CASUAL
+		1: current_mode = GameMode.COMPETITIVE
+		2: current_mode = GameMode.CHALLENGE
+		3: current_mode = GameMode.ENDLESS
+		4: current_mode = GameMode.DAILY
 	_update_mode_menu_check()
-	restart_game()
+	match current_mode:
+		GameMode.CASUAL:
+			_show_casual_intro_dialog()
+		GameMode.COMPETITIVE:
+			_show_competitive_intro_dialog()
+		GameMode.CHALLENGE:
+			_show_challenge_intro_dialog()
+		GameMode.ENDLESS:
+			_show_endless_intro_dialog()
+		GameMode.DAILY:
+			_show_daily_intro_dialog()
+
+
+# 显示挑战模式介绍弹窗，关闭后再开始游戏
+func _show_challenge_intro_dialog() -> void:
+	var content := "[center]\n\n"
+	content += "[color=#FFF8F0][font_size=24]• 固定 [color=#E07A82][b]2 分钟[/b][/color] 倒计时[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 消除 [color=#E07A82][b]不会恢复[/b][/color] 时间[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 清空后立即生成 [color=#66ff66][b]新棋盘[/b][/color]，无限续关[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 目标：在限制时间内挑战获得高分！[/font_size][/color][/center]"
+	_show_custom_dialog(DialogType.RULES, "挑战模式", content, "(点击任意位置或按任意键开始)", restart_game)
+
+
+# 显示无尽模式介绍弹窗，关闭后再开始游戏
+func _show_endless_intro_dialog() -> void:
+	var content := "[center]\n\n"
+	content += "[color=#FFF8F0][font_size=24]• 每消除一对，上方会 [color=#66ff66][b]下落新牌[/b][/color] 补充空位[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 棋盘 [color=#66ff66][b]始终充满[/b][/color]，不会出现死局[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 倒计时耗尽即结束[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 目标：在倒计时结束前挑战最高分！[/font_size][/color][/center]"
+	_show_custom_dialog(DialogType.RULES, "无尽模式", content, "(点击任意位置或按任意键开始)", restart_game)
+
+
+# 显示每日挑战模式介绍弹窗，关闭后再开始游戏
+func _show_daily_intro_dialog() -> void:
+	var content := "[center]\n\n"
+	content += "[color=#FFF8F0][font_size=24]• 使用 [color=#5AB4E0][b]当日日期[/b][/color] 作为固定 Seed[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 所有玩家当天面对 [color=#5AB4E0][b]完全相同[/b][/color] 的棋盘[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 通关后可比拼分数与用时[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 每天只有一次机会，尽情挑战吧！[/font_size][/color][/center]"
+	_show_custom_dialog(DialogType.RULES, "每日挑战", content, "(点击任意位置或按任意键开始)", restart_game)
+
+
+# 显示休闲模式介绍弹窗，关闭后再开始游戏
+func _show_casual_intro_dialog() -> void:
+	var content := "[center]\n\n"
+	content += "[color=#FFF8F0][font_size=24]• 提示与洗牌 [color=#66ff66][b]无限使用[/b][/color][/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 无分数压力，轻松练习[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 适合熟悉规则与图案[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 尽情享受消除乐趣！[/font_size][/color][/center]"
+	_show_custom_dialog(DialogType.RULES, "休闲模式", content, "(点击任意位置或按任意键开始)", restart_game)
+
+
+# 显示竞技模式介绍弹窗，关闭后再开始游戏
+func _show_competitive_intro_dialog() -> void:
+	var content := "[center]\n\n"
+	content += "[color=#FFF8F0][font_size=24]• 每关提示与洗牌次数 [color=#E07A82][b]有限[/b][/color][/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 第 1–7 关：5 次提示、2 次洗牌[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 第 8–10 关：8 次提示、3 次洗牌[/font_size][/color]\n"
+	content += "[color=#FFF8F0][font_size=24]• 次数用尽后对应按钮变灰，谨慎使用！[/font_size][/color][/center]"
+	_show_custom_dialog(DialogType.RULES, "竞技模式", content, "(点击任意位置或按任意键开始)", restart_game)
 
 
 # 更新模式菜单勾选状态
@@ -895,6 +1257,9 @@ func _update_mode_menu_check() -> void:
 	var mode_popup := game_menu.get_popup().get_node("ModeMenu") as PopupMenu
 	mode_popup.set_item_checked(0, current_mode == GameMode.CASUAL)
 	mode_popup.set_item_checked(1, current_mode == GameMode.COMPETITIVE)
+	mode_popup.set_item_checked(2, current_mode == GameMode.CHALLENGE)
+	mode_popup.set_item_checked(3, current_mode == GameMode.ENDLESS)
+	mode_popup.set_item_checked(4, current_mode == GameMode.DAILY)
 
 
 # 处理关卡选择子菜单
@@ -979,13 +1344,48 @@ func _on_help_menu_item_pressed(index: int) -> void:
 			var rules := "点击两个相同图案的格子。\n若能用不超过 2 个转弯的直线连接，则消除。\n消除所有图案即可获胜。\n\n提示：路径可以经过棋盘外圈的虚拟空白区域。"
 			_show_custom_dialog(DialogType.RULES, "连连看规则", rules)
 		1:
-			var mode_rules := "【休闲模式】\n提示与洗牌可无限使用，适合轻松练习。\n\n【竞技模式】\n每关开始时分配固定次数的提示与洗牌：\n第 1–7 关：5 次提示、2 次洗牌\n第 8–10 关：8 次提示、3 次洗牌\n次数用尽后对应按钮将变灰且无法使用。"
+			var mode_rules := "[table=2]"
+			mode_rules += "[cell padding=0,0,30,0]"
+			mode_rules += "[color=#5AB4E0][b]休闲模式[/b][/color]\n"
+			mode_rules += "提示与洗牌无限使用，无分数压力，适合轻松练习。"
+			mode_rules += "[/cell]"
+			mode_rules += "[cell padding=30,0,0,0]"
+			mode_rules += "[color=#5AB4E0][b]无尽模式[/b][/color]\n"
+			mode_rules += "每消除一对，上方会下落新牌补充空位，棋盘始终充满。在倒计时结束前挑战自己的最高分数。"
+			mode_rules += "[/cell]"
+			mode_rules += "[cell padding=0,0,30,0]"
+			mode_rules += "[color=#5AB4E0][b]竞技模式[/b][/color]\n"
+			mode_rules += "每关提示与洗牌次数有限：\n"
+			mode_rules += "• 第 1–7 关：5 次提示、2 次洗牌\n"
+			mode_rules += "• 第 8–10 关：8 次提示、3 次洗牌\n"
+			mode_rules += "次数用尽后对应按钮变灰。"
+			mode_rules += "[/cell]"
+			mode_rules += "[cell padding=30,0,0,0]"
+			mode_rules += "[color=#5AB4E0][b]每日挑战[/b][/color]\n"
+			mode_rules += "使用当日日期作为固定 Seed，所有玩家当天面对完全相同的棋盘，通关后可比拼分数与用时。"
+			mode_rules += "[/cell]"
+			mode_rules += "[cell padding=0,0,30,0]"
+			mode_rules += "[color=#5AB4E0][b]倒计时模式[/b][/color]\n"
+			mode_rules += "固定 [color=#E07A82]2 分钟[/color] 倒计时，消除不会恢复时间。清空棋盘后立即生成新棋盘继续刷分。"
+			mode_rules += "[/cell]"
+			mode_rules += "[cell][/cell]"
+			mode_rules += "[/table]"
 			_show_custom_dialog(DialogType.MODE_RULES, "模式说明", mode_rules)
 		2:
-			var shortcuts := "T / 鼠标右键单击：提示（高亮显示一对可连通的图案）\nX / 鼠标右键双击：洗牌（重新排列剩余图案）\n空格键 / 鼠标左键快速双击：暂停 / 继续游戏\n鼠标左键：点击选择或消除图案"
+			var shortcuts := "T / 鼠标右键单击：提示（高亮显示一对可连通的图案）\nX / 鼠标右键双击：洗牌（重新排列剩余图案）\n 鼠标左键快速双击 / 空格键：暂停 / 继续游戏\n鼠标左键：点击选择或消除图案"
 			_show_custom_dialog(DialogType.SHORTCUTS, "快捷键说明", shortcuts)
 		3:
-			var score_rules := "从上一次消除完成到下一次消除完成的时间间隔决定得分：\n3 秒内消除：30 分\n5 秒内消除：20 分\n10 秒内消除：15 分\n20 秒内消除：12 分\n超过 20 秒：10 分"
+			var score_rules := "每次消除得分 = 速度基础分 × 棋盘大小系数 × 难度系数 × 关卡系数 × 连击系数\n\n"
+			score_rules += "[color=#E0B45A]速度基础分[/color]（两次消除间隔）：\n"
+			score_rules += "3 秒内：30 分 | 5 秒内：20 分 | 10 秒内：15 分 | 20 秒内：12 分 | 超过 20 秒：10 分\n\n"
+			score_rules += "[color=#E0B45A]棋盘大小系数[/color]：当前对数 ÷ 42（以 7×12 为基准）\n"
+			score_rules += "[color=#E0B45A]难度系数[/color]：初级 1.0 | 中级 1.3 | 高级 1.6\n"
+			score_rules += "[color=#E0B45A]关卡系数[/color]：1 + (关卡 - 1) × 0.15\n"
+			score_rules += "[color=#E0B45A]连击系数[/color]：1 + (连击数 - 1) × 0.2\n\n"
+			score_rules += "[color=#E0B45A]额外规则[/color]：\n"
+			score_rules += "关卡完成奖励 = 剩余时间 × 3 × 难度系数 × 关卡系数\n"
+			score_rules += "使用提示扣分 = 30 × 难度系数 × 关卡系数\n"
+			score_rules += "使用洗牌扣分 = 80 × 难度系数 × 关卡系数"
 			_show_custom_dialog(DialogType.SCORE_RULES, "积分规则", score_rules)
 		4:
 			_show_custom_dialog(DialogType.ABOUT, "关于", "连连看 v1.0\n使用 Godot 4.5 制作")
@@ -1038,6 +1438,8 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 	else:
 		dialog_content.show()
 		dialog_content.text = content
+		# 模式说明使用两列表格并带较大内边距，需要更宽的弹窗才不易裁切
+		dialog_content.custom_minimum_size.x = 1600 if type == DialogType.MODE_RULES else 1200
 		dialog_hint.show()
 		dialog_hint.text = hint
 		dialog_hint.modulate = Color.WHITE
@@ -1065,7 +1467,14 @@ func _hide_custom_dialog() -> void:
 	match _current_dialog_type:
 		DialogType.LEVEL_COMPLETE:
 			_on_level_complete_confirmed()
+	if _dialog_callback.is_valid():
+		_dialog_callback.call()
 	_dialog_callback = Callable()
+
+	# 若从游戏结束面板打开排行榜，关闭后返回游戏结束面板
+	if _return_to_game_over_panel:
+		_return_to_game_over_panel = false
+		game_over_panel.show()
 
 
 # 右键单击延迟到期后执行提示
@@ -1175,10 +1584,26 @@ func _process(delta: float) -> void:
 		_on_time_up()
 
 
-# 时间耗尽：显示结束语并播放失败音效
+# 时间耗尽：显示结束面板并播放失败音效
 func _on_time_up() -> void:
 	game_state = GameState.GAME_OVER
-	game_over_label.text = "时间结束~欢迎游玩，下次再接再厉！"
+	if current_mode == GameMode.CHALLENGE:
+		# 倒计时模式：区分“倒计时条耗尽”与“两分钟总时长到限”两种失败描述
+		if score_manager.time_up_reason == ScoreManager.TimeUpReason.DURATION_LIMIT:
+			game_over_label.text = "挑战时间到"
+			game_over_stats_label.text = "[color=#FFF8F0]两分钟挑战已结束\n最终得分：[/color][color=#E07A82]%d[/color]" % score_manager.score
+		else:
+			game_over_label.text = "时间耗尽"
+			game_over_stats_label.text = "[color=#FFF8F0]倒计时已见底，挑战失败\n最终得分：[/color][color=#E07A82]%d[/color]" % score_manager.score
+		next_level_button.text = "再玩一次"
+		next_level_button.show()
+	else:
+		game_over_label.text = "时间结束"
+		game_over_stats_label.text = "[color=#FFF8F0]欢迎游玩，下次再接再厉！\n分数：[/color][color=#E07A82]%d[/color]" % score_manager.score
+		next_level_button.hide()
+	replay_level_button.show()
+	view_leaderboard_button.show()
+	return_to_menu_button.show()
 	game_over_panel.show()
 	audio_manager.play_sound(AudioManager.GAME_OVER_SOUND)
 	_show_full_ui()
@@ -1228,9 +1653,12 @@ func _show_full_ui() -> void:
 
 # 刷新紧凑顶部 UI 的倒计时条、本关用时与分数
 func _update_compact_ui() -> void:
-	compact_timer_bar.max_value = ScoreManager.MAX_TIME
+	compact_timer_bar.max_value = score_manager.max_time
 	compact_timer_bar.value = score_manager.remaining_time
-	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.level_time)
+	if current_mode == GameMode.CHALLENGE:
+		compact_time_label.text = "[color=#8C5C33]倒计时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.remaining_time)
+	else:
+		compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.level_time)
 	compact_score_label.text = "[color=#8C5C33]分数：[/color][color=#E07A82]%d[/color]" % score_manager.score
 
 
@@ -1248,6 +1676,32 @@ func restart_game(reset_progress: bool = true) -> void:
 	if reset_progress:
 		current_level = 1
 
+	# 模式特定初始化
+	match current_mode:
+		GameMode.CHALLENGE:
+			score_manager.max_time = ScoreManager.CHALLENGE_TIME
+			score_manager.time_bonus_enabled = false
+			score_manager.duration_limited = true
+			board_manager.randomize_seed()
+			if reset_progress:
+				current_level = 1
+		GameMode.ENDLESS:
+			score_manager.max_time = ScoreManager.MAX_TIME
+			score_manager.time_bonus_enabled = true
+			score_manager.duration_limited = false
+			board_manager.randomize_seed()
+			current_level = 1
+		GameMode.DAILY:
+			score_manager.max_time = ScoreManager.MAX_TIME
+			score_manager.time_bonus_enabled = true
+			score_manager.duration_limited = false
+			board_manager.set_seed(_get_daily_seed() + current_level)
+		_:
+			score_manager.max_time = ScoreManager.MAX_TIME
+			score_manager.time_bonus_enabled = true
+			score_manager.duration_limited = false
+			board_manager.randomize_seed()
+
 	if current_level > _get_max_level():
 		current_level = 1
 
@@ -1264,7 +1718,12 @@ func restart_game(reset_progress: bool = true) -> void:
 	_top_leave_time = 0.0
 
 	score_manager.reset(reset_progress)
+	if reset_progress:
+		_session_level_stats.clear()
+	_level_hints_used = 0
+	_level_shuffles_used = 0
 	board_manager.generate_board()
+	score_manager.setup_level(board_manager.get_rows(), board_manager.get_cols(), current_level, current_difficulty)
 
 	# 根据当前模式设置提示与洗牌次数
 	if current_mode == GameMode.COMPETITIVE:
@@ -1301,13 +1760,13 @@ func restart_game(reset_progress: bool = true) -> void:
 
 # 同步倒计时进度条的最大值与当前值，并按剩余比例切换红/橙/绿渐变，最后 10 秒触发脉冲闪烁
 func _update_timer_bar() -> void:
-	timer_bar.max_value = ScoreManager.MAX_TIME
+	timer_bar.max_value = score_manager.max_time
 	timer_bar.value = score_manager.remaining_time
-	compact_timer_bar.max_value = ScoreManager.MAX_TIME
+	compact_timer_bar.max_value = score_manager.max_time
 	compact_timer_bar.value = score_manager.remaining_time
 
 	# 根据剩余时间比例切换进度条渐变颜色
-	var ratio := score_manager.remaining_time / ScoreManager.MAX_TIME
+	var ratio := score_manager.remaining_time / score_manager.max_time
 	if ratio < 0.3:
 		_timer_gradient.colors = PackedColorArray([
 			Color(0.88, 0.12, 0.12),
@@ -1353,8 +1812,13 @@ func _create_timer_pulse_tween(bar: ProgressBar) -> Tween:
 
 # 刷新时间显示
 func _update_time_labels() -> void:
-	time_label.text = "[color=#8C5C33]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % [ScoreManager.format_time(score_manager.total_game_time), ScoreManager.format_time(score_manager.level_time)]
-	compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.level_time)
+	if current_mode == GameMode.CHALLENGE:
+		var countdown_text := ScoreManager.format_time(score_manager.remaining_time)
+		time_label.text = "[color=#8C5C33]倒计时：[/color][color=#FFF8F0]%s[/color]" % countdown_text
+		compact_time_label.text = "[color=#8C5C33]倒计时：[/color][color=#FFF8F0]%s[/color]" % countdown_text
+	else:
+		time_label.text = "[color=#8C5C33]总用时：[/color][color=#FFF8F0]%s[/color] | [color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % [ScoreManager.format_time(score_manager.total_game_time), ScoreManager.format_time(score_manager.level_time)]
+		compact_time_label.text = "[color=#8C5C33]本关用时：[/color][color=#FFF8F0]%s[/color]" % ScoreManager.format_time(score_manager.level_time)
 
 
 # 刷新分数显示
@@ -1368,8 +1832,8 @@ func _on_score_label_resized() -> void:
 	score_label.pivot_offset = score_label.size / 2.0
 
 
-func _emphasize_score_label(points: int = 0) -> void:
-	var tier_color := ScoreManager.get_score_tier_color(points)
+func _emphasize_score_label(time_since_last: float = -1.0) -> void:
+	var tier_color := ScoreManager.get_score_tier_color(time_since_last)
 
 	# 根据当前显示模式，脉冲对应的分数标签
 	var visible_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
@@ -1385,17 +1849,21 @@ func _emphasize_score_label(points: int = 0) -> void:
 
 
 # 显示加分反馈：方案 1（消除位置飘字）+ 方案 2（分数标签旁弹出 + 标签脉冲）
-func _show_score_feedback(points: int, match_midpoint: Vector2) -> void:
+func _show_score_feedback(points: int, time_since_last: float, match_midpoint: Vector2) -> void:
 	# 方案 1：在消除位置飘出带等级色的分数
 	if SCHEME_1_FLOATING_TEXT_ENABLED:
-		_spawn_floating_score(points, match_midpoint)
+		_spawn_floating_score(points, time_since_last, match_midpoint)
 
 	# 方案 2：在可见的分数标签旁弹出“+N”，同时分数标签脉冲变色
 	var color_hex := ScoreManager.SCORE_COLOR_NORMAL
-	match points:
-		30: color_hex = ScoreManager.SCORE_COLOR_GOLD
-		20: color_hex = ScoreManager.SCORE_COLOR_SILVER
-		15: color_hex = ScoreManager.SCORE_COLOR_BRONZE
+	if time_since_last < 0:
+		color_hex = ScoreManager.SCORE_COLOR_NORMAL
+	elif time_since_last <= 3.0:
+		color_hex = ScoreManager.SCORE_COLOR_GOLD
+	elif time_since_last <= 5.0:
+		color_hex = ScoreManager.SCORE_COLOR_SILVER
+	elif time_since_last <= 10.0:
+		color_hex = ScoreManager.SCORE_COLOR_BRONZE
 	var target_score_label: RichTextLabel = score_label if score_label.visible else compact_score_label
 	score_gain_label.text = "[color=%s][b]+%d[/b][/color]" % [color_hex, points]
 	score_gain_label.global_position = target_score_label.global_position + Vector2(target_score_label.size.x + 8.0, 4.0)
@@ -1410,9 +1878,12 @@ func _show_score_feedback(points: int, match_midpoint: Vector2) -> void:
 		score_gain_label.modulate = Color.WHITE
 	)
 
+	# 同时让分数标签脉冲变色（函数当前未被外部单独调用，保留备用）
+	_emphasize_score_label(time_since_last)
+
 
 # 方案 1：在指定位置生成向上飘动并逐渐消失的分数飘字（连击快时自动延长停留）
-func _spawn_floating_score(points: int, pos: Vector2) -> void:
+func _spawn_floating_score(points: int, time_since_last: float, pos: Vector2) -> void:
 	var idx := _score_popup_index
 	var popup: Label = score_popups[idx]
 	_score_popup_index = (_score_popup_index + 1) % score_popups.size()
@@ -1423,7 +1894,7 @@ func _spawn_floating_score(points: int, pos: Vector2) -> void:
 		_score_popup_tweens[idx] = null
 
 	popup.text = "+%d" % points
-	popup.modulate = ScoreManager.get_score_tier_color(points)
+	popup.modulate = ScoreManager.get_score_tier_color(time_since_last)
 	popup.global_position = pos - popup.size / 2.0
 	popup.show()
 
@@ -1538,11 +2009,15 @@ func _on_cell_clicked(index: int) -> void:
 	# 方案 1/2：显示加分反馈（方案 1 可通过 SCHEME_1_FLOATING_TEXT_ENABLED 单独关闭）
 	# 飘字显示在第二次点击的格子中心
 	var popup_pos: Vector2 = cell2.global_position + cell2.size / 2.0
-	_show_score_feedback(score_manager.get_last_points(), popup_pos)
+	_show_score_feedback(score_manager.get_last_points(), time_since_last, popup_pos)
 
 	var collapse_tween := board_manager.apply_collapse(current_level, _level2_direction, _level4_direction)
 	if collapse_tween != null:
 		await collapse_tween.finished
+
+	# 无尽模式：坍塌后上方下落新牌，保持棋盘始终充满
+	if current_mode == GameMode.ENDLESS:
+		board_manager.drop_tiles(board_manager.get_skin_tile_count())
 
 	board_manager.update_all_cells(selected_index)
 	_update_ui()
@@ -1667,6 +2142,14 @@ func _on_hint_button_pressed() -> void:
 		_update_button_texts()
 		_update_ui()
 
+	# 记录本关提示次数（所有模式都统计，便于排行榜展示）
+	_level_hints_used += 1
+
+	# 提示扣分（休闲模式也扣，保证排行榜可比性）
+	score_manager.apply_hint_penalty()
+	_update_score_label()
+	_update_compact_ui()
+
 	_hint_active = true
 
 	# 让两个目标格子的图片闪烁两下
@@ -1706,6 +2189,15 @@ func _on_shuffle_button_pressed() -> void:
 		shuffles_remaining -= 1
 		_update_button_texts()
 
+	# 记录本关洗牌次数（所有模式都统计，便于排行榜展示）
+	_level_shuffles_used += 1
+
+	# 洗牌扣分（休闲模式也扣，保证排行榜可比性）
+	score_manager.apply_shuffle_penalty()
+	_update_score_label()
+	_update_compact_ui()
+
+	audio_manager.play_sound(AudioManager.SHUFFLE_SOUND)
 	board_manager.shuffle_remaining()
 	selected_index = -1
 	board_manager.update_all_cells(selected_index)
@@ -1786,8 +2278,10 @@ func _update_ui() -> void:
 
 	undo_button.disabled = move_history.is_empty()
 	redo_button.disabled = undo_history.is_empty()
-	var can_hint := is_casual or hints_remaining > 0
-	var can_shuffle := is_casual or shuffles_remaining > 0
+	# 竞技模式消耗次数；其余模式（含挑战/无尽/每日）不限制次数，仅扣分数
+	var is_limited_mode := current_mode == GameMode.COMPETITIVE
+	var can_hint := not is_limited_mode or hints_remaining > 0
+	var can_shuffle := not is_limited_mode or shuffles_remaining > 0
 	hint_button.disabled = not can_hint
 	shuffle_button.disabled = not can_shuffle
 	_update_mode_label()
@@ -1796,15 +2290,21 @@ func _update_ui() -> void:
 
 # 刷新模式标签显示
 func _update_mode_label() -> void:
-	var mode_name := "休闲" if current_mode == GameMode.CASUAL else "竞技"
+	var mode_name: String
+	match current_mode:
+		GameMode.CASUAL: mode_name = "休闲"
+		GameMode.COMPETITIVE: mode_name = "竞技"
+		GameMode.CHALLENGE: mode_name = "挑战"
+		GameMode.ENDLESS: mode_name = "无尽"
+		GameMode.DAILY: mode_name = "每日"
 	mode_label.text = "[color=#8C5C33]模式：[/color][color=#FFF8F0]%s[/color]" % mode_name
 
 
 # 刷新提示与洗牌按钮文本（竞技模式显示剩余次数）
 func _update_button_texts() -> void:
-	if current_mode == GameMode.CASUAL:
-		hint_button.text = "💡 提示"
-		shuffle_button.text = "🔀 洗牌"
-	else:
+	if current_mode == GameMode.COMPETITIVE:
 		hint_button.text = "💡 提示(%d)" % hints_remaining
 		shuffle_button.text = "🔀 洗牌(%d)" % shuffles_remaining
+	else:
+		hint_button.text = "💡 提示"
+		shuffle_button.text = "🔀 洗牌"

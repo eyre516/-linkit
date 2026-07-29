@@ -20,11 +20,6 @@ height = 16
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_timer_fill"]
 texture = SubResource("GradientTexture2D_timer")
 
-[sub_resource type="LabelSettings" id="LabelSettings_pause"]
-font = ExtResource("4_2epjp")
-font_size = 140
-font_color = Color(0.88, 0.48, 0.51, 0.9)
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_welcome_side"]
 bg_color = Color(0.164706, 0.227451, 0.290196, 1)
 corner_radius_top_left = 8
@@ -38,6 +33,11 @@ corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
+
+[sub_resource type="LabelSettings" id="LabelSettings_pause"]
+font = ExtResource("4_2epjp")
+font_size = 140
+font_color = Color(0.88, 0.48, 0.51, 0.9)
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -630,7 +630,6 @@ layout_mode = 2
 [node name="MenuBarTab" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
-anchors_preset = 0
 offset_left = 16.0
 offset_top = 58.0
 offset_right = 102.0
@@ -651,20 +650,64 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -120.0
-offset_top = -75.0
-offset_right = 120.0
-offset_bottom = 75.0
+offset_left = -160.0
+offset_top = -190.0
+offset_right = 160.0
+offset_bottom = 190.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="GameOverLabel" type="Label" parent="CanvasLayer/GameOverPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/GameOverPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="GameOverLabel" type="Label" parent="CanvasLayer/GameOverPanel/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 36
 text = "You Win!"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="GameOverStatsLabel" type="RichTextLabel" parent="CanvasLayer/GameOverPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 24
+theme_override_font_sizes/bold_font_size = 24
+bbcode_enabled = true
+text = "统计信息"
+fit_content = true
+horizontal_alignment = 1
+
+[node name="ButtonContainer" type="VBoxContainer" parent="CanvasLayer/GameOverPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="NextLevelButton" type="Button" parent="CanvasLayer/GameOverPanel/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ToolbarButton"
+text = "下一关"
+
+[node name="ReplayLevelButton" type="Button" parent="CanvasLayer/GameOverPanel/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ToolbarButton"
+text = "重玩本关"
+
+[node name="ViewLeaderboardButton" type="Button" parent="CanvasLayer/GameOverPanel/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ToolbarButton"
+text = "查看排行榜"
+
+[node name="ReturnToMenuButton" type="Button" parent="CanvasLayer/GameOverPanel/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ToolbarButton"
+text = "返回主菜单"
 
 [node name="CustomDialog" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -813,17 +856,33 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "高级"
 
+[node name="TypeRow" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="LeaderboardTypeScore" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel/TypeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "总分榜"
+
+[node name="LeaderboardTypeSpeedrun" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel/TypeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "速通榜"
+
 [node name="LeaderboardContent" type="RichTextLabel" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(900, 500)
 layout_mode = 2
-theme_override_font_sizes/normal_font_size = 32
-theme_override_font_sizes/bold_font_size = 32
-theme_override_font_sizes/mono_font_size = 32
+theme_override_font_sizes/normal_font_size = 28
+theme_override_font_sizes/bold_font_size = 28
+theme_override_font_sizes/mono_font_size = 24
 bbcode_enabled = true
 text = "暂无记录"
 fit_content = true
-scroll_active = false
 horizontal_alignment = 1
 
 [node name="PaginationRow" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
@@ -849,6 +908,23 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "下一页"
+
+[node name="ActionRow" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="ExportLeaderboardButton" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "导出榜单"
+
+[node name="ShareLeaderboardButton" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "分享本条"
 
 [node name="LeaderboardCloseButton" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/LeaderboardPanel"]
 unique_name_in_owner = true
@@ -994,7 +1070,7 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
-text = "继续游戏（空格/任意位置双击）"
+text = "继续游戏（任意位置双击/空格）"
 
 [node name="RestartButton2" type="Button" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
 unique_name_in_owner = true

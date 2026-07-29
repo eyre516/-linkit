@@ -6,6 +6,31 @@ class_name BoardManager
 enum Level2Dir {LEFT, RIGHT}
 enum Level4Dir {UP, DOWN}
 
+# 可控随机数生成器，支持每日挑战固定 Seed
+var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
+func _ready() -> void:
+	_rng.randomize()
+
+
+# 设置固定 Seed（每日挑战用）
+func set_seed(seed_value: int) -> void:
+	_rng.seed = seed_value
+
+
+# 恢复随机 Seed
+func randomize_seed() -> void:
+	_rng.randomize()
+
+
+# 使用 _rng 打乱数组（Array.shuffle 只使用全局 RNG）
+func _shuffle_array(arr: Array) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := _rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+
 # 默认棋盘尺寸（宝可梦图版 / 经典高级难度使用）
 const ROWS := 7
 const COLS := 12
@@ -193,7 +218,7 @@ func _place_guaranteed_pairs(available_positions: Array[Vector2i], tiles_by_type
 	# 阶段 1：相邻对
 	while placed < required and not pairable_set.is_empty():
 		var keys: Array = pairable_set.keys()
-		var pos: Vector2i = keys[randi() % keys.size()]
+		var pos: Vector2i = keys[_rng.randi() % keys.size()]
 
 		var neighbors: Array[Vector2i] = []
 		for dir in DIRECTIONS:
@@ -205,7 +230,7 @@ func _place_guaranteed_pairs(available_positions: Array[Vector2i], tiles_by_type
 			pairable_set.erase(pos)
 			continue
 
-		var neighbor: Vector2i = neighbors[randi() % neighbors.size()]
+		var neighbor: Vector2i = neighbors[_rng.randi() % neighbors.size()]
 		var type := _find_type_with_min_count(tiles_by_type, 2)
 		if type == -1:
 			break
@@ -251,7 +276,7 @@ func _place_guaranteed_pairs(available_positions: Array[Vector2i], tiles_by_type
 		var order: Array[int] = []
 		for i in range(pair_count):
 			order.append(i)
-		order.shuffle()
+		_shuffle_array(order)
 
 		for idx in order:
 			if placed >= required:
@@ -295,7 +320,7 @@ func _find_type_with_min_count(tiles_by_type: Dictionary[int, int], min_count: i
 			candidates.append(type)
 	if candidates.is_empty():
 		return -1
-	return candidates[randi() % candidates.size()]
+	return candidates[_rng.randi() % candidates.size()]
 
 
 # 将剩余图块随机填入剩余位置
@@ -304,7 +329,7 @@ func _fill_remaining(available_positions: Array[Vector2i], tiles_by_type: Dictio
 	for type: int in tiles_by_type.keys():
 		for i in range(tiles_by_type[type]):
 			remaining_tiles.append(type)
-	remaining_tiles.shuffle()
+	_shuffle_array(remaining_tiles)
 
 	for i in range(available_positions.size()):
 		var pos: Vector2i = available_positions[i]
@@ -762,6 +787,43 @@ func shuffle_remaining() -> void:
 
 	_place_guaranteed_pairs(available_positions, tiles_by_type, required)
 	_fill_remaining(available_positions, tiles_by_type)
+
+
+# 无尽模式：消除后让上方新牌下落填充空位
+# 对每一列，将非空图块下沉，顶部空位用随机生成的新对子填充
+func drop_tiles(tile_count: int) -> void:
+	var rows := get_rows()
+	var cols := get_cols()
+
+	# 阶段 1：每列重力下沉
+	for c in range(cols):
+		var new_col: Array[int] = []
+		for r in range(rows):
+			if board[r][c] != 0:
+				new_col.append(board[r][c])
+		for r in range(rows):
+			if r < new_col.size():
+				board[r][c] = new_col[r]
+			else:
+				board[r][c] = 0
+
+	# 阶段 2：统计顶部空位并成对填充，保证图块数量始终为偶数
+	var empty_positions: Array[Vector2i] = []
+	for c in range(cols):
+		for r in range(rows):
+			if board[r][c] == 0:
+				empty_positions.append(Vector2i(r, c))
+
+	while not empty_positions.is_empty():
+		var type := _rng.randi() % tile_count + 1
+		# 每次填充一对相同图案
+		for i in range(2):
+			if empty_positions.is_empty():
+				break
+			var idx := _rng.randi() % empty_positions.size()
+			var pos: Vector2i = empty_positions[idx]
+			board[pos.x][pos.y] = type
+			empty_positions.remove_at(idx)
 
 
 # ---------- 坍塌实现 ----------
