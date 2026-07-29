@@ -3531,3 +3531,120 @@ cd assets/连连看例子
 
 - 静态检查无语法错误。
 - 建议在编辑器中点击「游戏 → 模式 → 休闲模式」和「游戏 → 模式 → 竞技模式」，确认弹出对应介绍窗口且只有一个标题，关闭后 respective 模式正常开始。
+
+
+---
+
+## 2026-07-29 08:28
+
+**原因**：用户希望所有弹窗都使用 `assets/fonts/` 目录下的字体。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 为 `CanvasLayer` 下的四个主要弹窗面板显式设置 `theme = ExtResource("3_ocean")`：
+	 - `GameOverPanel`（游戏结束 / 关卡完成面板）
+	 - `CustomDialog`（自定义弹窗：欢迎、规则、排行榜、姓名输入等）
+	 - `PauseMenuPanel`（暂停菜单）
+	 - `SettingsPanel`（设置面板）
+   - 这样即使 `CanvasLayer` 导致主题继承不稳定，弹窗内的 Label、RichTextLabel、Button、LineEdit 等控件也会明确使用 `ocean_theme.tres` 中定义的 `NotoSerifSC-Regular.otf` 字体。
+
+2. **`game.gd`**：
+   - 新增成员变量 `chinese_font: FontFile = preload("res://assets/fonts/NotoSerifSC-Regular.otf")`。
+   - 在 `_ready()` 中使用 `chinese_font` 设置 Emoji 回退。
+   - 在 `_show_toast()` 中，为动态创建的临时提示 Label 显式设置 `add_theme_font_override("font", chinese_font)`，确保 toast 也使用项目字体。
+   - 修复：该字体变量使用 `var` 而非 `const`，避免 GDScript 报错 "Cannot assign a new value to a constant"。
+
+**影响位置**：
+
+- `game.tscn`：
+  - 第 645 行附近：`GameOverPanel` 增加 `theme = ExtResource("3_ocean")`。
+  - 第 712 行附近：`CustomDialog` 增加 `theme = ExtResource("3_ocean")`。
+  - 第 1043 行附近：`PauseMenuPanel` 增加 `theme = ExtResource("3_ocean")`。
+  - 第 1094 行附近：`SettingsPanel` 增加 `theme = ExtResource("3_ocean")`。
+- `game.gd`：
+  - 第 39 行：新增 `chinese_font` 成员变量。
+  - 第 224 行：`_ready()` 使用 `chinese_font` 设置 Emoji 回退。
+  - 第 795 行：`_show_toast()` 显式设置 toast 字体。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在 Godot 编辑器中运行项目，依次打开：欢迎弹窗、暂停菜单、设置面板、游戏结束面板、排行榜弹窗，确认所有文字均显示为 `NotoSerifSC-Regular.otf` 字体（中文显示为宋体风格）。
+
+
+---
+
+## 2026-07-29 08:35
+
+**原因**：用户希望每个模式开始时的介绍弹窗使用白色标题和白色“按任意键继续”提示，并将弹窗背景改为与游戏棋盘背景相同的浅蓝色。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 在 `DialogType` 枚举中新增 `MODE_INTRO`，用于标识模式开始时的介绍弹窗（休闲、竞技、倒计时、无尽、每日挑战）。
+   - 五个模式介绍弹窗函数（`_show_casual_intro_dialog()`、`_show_competitive_intro_dialog()`、`_show_challenge_intro_dialog()`、`_show_endless_intro_dialog()`、`_show_daily_intro_dialog()`）全部改为传入 `DialogType.MODE_INTRO`。
+   - 新增颜色常量：
+	 - `CUSTOM_DIALOG_BG_DEFAULT := Color(0.08, 0.18, 0.25, 0.75)`（自定义弹窗默认深蓝半透明背景）
+	 - `CUSTOM_DIALOG_BG_BOARD := Color(0.546, 0.748, 0.818, 1)`（与游戏棋盘背景同色浅蓝）
+   - 在 `_show_custom_dialog()` 中增加样式分支：
+	 - 当 `type == DialogType.MODE_INTRO` 时：
+	   - 将 `CustomDialog/Background` 的颜色设为 `CUSTOM_DIALOG_BG_BOARD`。
+	   - 为 `dialog_title` 和 `dialog_hint` 添加 `font_color` 主题覆盖为白色。
+	 - 其他类型弹窗恢复默认深蓝背景和默认字体颜色。
+
+**影响位置**：
+
+- `game.gd`：
+  - 第 51 行：`DialogType` 枚举增加 `MODE_INTRO`。
+  - 第 55–57 行：新增 `CUSTOM_DIALOG_BG_DEFAULT` 与 `CUSTOM_DIALOG_BG_BOARD` 常量。
+  - 第 1217、1227、1237、1247、1257 行：五个模式介绍弹窗改为 `DialogType.MODE_INTRO`。
+  - 第 1431–1439 行：`_show_custom_dialog()` 中新增模式介绍弹窗的样式处理。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在 Godot 编辑器中点击「游戏 → 模式 → 休闲/竞技/倒计时/无尽/每日挑战」，确认弹窗标题与底部提示文字为白色，背景为浅蓝色（与棋盘背景一致）。
+- 确认其他弹窗（欢迎、规则、排行榜、关于等）保持原有深蓝半透明背景。
+
+
+---
+
+## 2026-07-29 08:42
+
+**原因**：用户要求所有弹窗都使用浅蓝色背景与白色标题/提示文字（与模式介绍弹窗保持一致）。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 新增共享子资源 `StyleBoxFlat_popup_bg`，背景色为棋盘同款浅蓝 `Color(0.546, 0.748, 0.818, 1)`，圆角 14。
+   - `CustomDialog/Background` 颜色改为浅蓝色。
+   - `CustomDialog` 内的 `DialogTitle` 与 `DialogHint` 字体颜色改为白色。
+   - `GameOverPanel`：应用 `StyleBoxFlat_popup_bg` 作为 panel 样式，并将 `GameOverLabel` 字体颜色改为白色。
+   - `PauseMenuPanel`：应用 `StyleBoxFlat_popup_bg` 作为 panel 样式，并将 `TitleLabel` 字体颜色改为白色。
+   - `SettingsPanel`：应用 `StyleBoxFlat_popup_bg` 作为 panel 样式，并将标题、主音量/音效/背景音乐标签及其百分比值标签字体颜色改为白色。
+
+2. **`game.gd`**：
+   - 移除 `DialogType.MODE_INTRO` 枚举值，五个模式介绍弹窗恢复使用 `DialogType.RULES`。
+   - 移除 `CUSTOM_DIALOG_BG_DEFAULT` 与 `CUSTOM_DIALOG_BG_BOARD` 常量。
+   - 移除 `_show_custom_dialog()` 中基于 `MODE_INTRO` 的动态样式分支（样式已统一在 `game.tscn` 中配置）。
+
+**影响位置**：
+
+- `game.tscn`：
+  - 第 2 行：`load_steps` 从 14 改为 15。
+  - 第 44–50 行：新增 `StyleBoxFlat_popup_bg`。
+  - 第 733 行：`CustomDialog/Background` 颜色改为浅蓝。
+  - 第 743、836 行：`DialogTitle`、`DialogHint` 字体颜色改为白色。
+  - 第 655、676 行：`GameOverPanel` 背景与标题颜色。
+  - 第 1059、1079 行：`PauseMenuPanel` 背景与标题颜色。
+  - 第 1111、1131、1140、1153、1161、1174、1182、1195 行：`SettingsPanel` 背景、标题与各设置项文字颜色。
+- `game.gd`：
+  - 第 51 行：`DialogType` 枚举恢复为不含 `MODE_INTRO`。
+  - 第 1217、1227、1237、1247、1257 行：恢复为 `DialogType.RULES`。
+  - 第 1426 行附近：移除 `_show_custom_dialog()` 中的动态样式分支。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在 Godot 编辑器中运行项目，依次打开：欢迎弹窗、暂停菜单、设置面板、游戏结束面板、各模式介绍弹窗、排行榜弹窗，确认背景均为浅蓝色，标题与提示文字均为白色。

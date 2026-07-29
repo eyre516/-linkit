@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://clervudyy6xv"]
+[gd_scene load_steps=15 format=3 uid="uid://clervudyy6xv"]
 
 [ext_resource type="Script" uid="uid://yey3gxhknoih" path="res://game.gd" id="1_feb5d"]
 [ext_resource type="PackedScene" uid="uid://bm62ipt0ofqm7" path="res://cell.tscn" id="2_e2o6t"]
@@ -38,6 +38,13 @@ corner_radius_bottom_left = 8
 font = ExtResource("4_2epjp")
 font_size = 140
 font_color = Color(0.88, 0.48, 0.51, 0.9)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup_bg"]
+bg_color = Color(0.546, 0.748, 0.818, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -645,6 +652,8 @@ vertical_alignment = 1
 [node name="GameOverPanel" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
+theme = ExtResource("3_ocean")
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_bg")
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -665,6 +674,7 @@ alignment = 1
 [node name="GameOverLabel" type="Label" parent="CanvasLayer/GameOverPanel/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 36
 text = "You Win!"
 horizontal_alignment = 1
@@ -712,6 +722,7 @@ text = "返回主菜单"
 [node name="CustomDialog" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
+theme = ExtResource("3_ocean")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -720,7 +731,7 @@ grow_vertical = 2
 
 [node name="Background" type="ColorRect" parent="CanvasLayer/CustomDialog"]
 layout_mode = 2
-color = Color(0.08, 0.18, 0.25, 0.75)
+color = Color(0.546, 0.748, 0.818, 1)
 
 [node name="CenterContainer" type="CenterContainer" parent="CanvasLayer/CustomDialog"]
 layout_mode = 2
@@ -731,6 +742,7 @@ layout_mode = 2
 [node name="DialogTitle" type="Label" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 48
 text = "标题"
 horizontal_alignment = 1
@@ -823,6 +835,7 @@ clear_button_enabled = true
 [node name="DialogHint" type="Label" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 30
 text = "点击任意位置或按任意键继续"
 horizontal_alignment = 1
@@ -1043,6 +1056,8 @@ color = Color(0.08, 0.18, 0.25, 0.5)
 [node name="PauseMenuPanel" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
+theme = ExtResource("3_ocean")
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_bg")
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -1062,6 +1077,7 @@ alignment = 1
 
 [node name="TitleLabel" type="Label" parent="CanvasLayer/PauseMenuPanel/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 42
 text = "游戏已暂停"
 horizontal_alignment = 1
@@ -1094,6 +1110,8 @@ text = "返回主菜单"
 [node name="SettingsPanel" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
 visible = false
+theme = ExtResource("3_ocean")
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_bg")
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -1113,6 +1131,7 @@ alignment = 1
 
 [node name="TitleLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 42
 text = "设置"
 horizontal_alignment = 1
@@ -1122,6 +1141,7 @@ layout_mode = 2
 
 [node name="Label" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/MasterVolumeRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "主音量"
 
@@ -1135,6 +1155,7 @@ step = 0.01
 [node name="MasterValueLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/MasterVolumeRow"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "80%"
 
@@ -1143,6 +1164,7 @@ layout_mode = 2
 
 [node name="Label" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/SFXVolumeRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "音效"
 
@@ -1156,6 +1178,7 @@ step = 0.01
 [node name="SFXValueLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/SFXVolumeRow"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "80%"
 
@@ -1164,6 +1187,7 @@ layout_mode = 2
 
 [node name="Label" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/BGMVolumeRow"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "背景音乐"
 
@@ -1177,6 +1201,7 @@ step = 0.01
 [node name="BGMValueLabel" type="Label" parent="CanvasLayer/SettingsPanel/VBoxContainer/BGMVolumeRow"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "50%"
 

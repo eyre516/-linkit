@@ -37,6 +37,7 @@ const BGM_VOLUME_SCALE := 0.35
 
 const FIREWORKS_SCENE := preload("res://fireworks.tscn")
 const EMOJI_FONT := preload("res://assets/fonts/NotoColorEmoji.ttf")
+var chinese_font: FontFile = preload("res://assets/fonts/NotoSerifSC-Regular.otf")
 
 # 顶部 UI 自动隐藏相关常量
 const AUTO_HIDE_DELAY := 5.0          # 游戏开始后多久自动隐藏顶部 UI
@@ -221,9 +222,8 @@ var _score_popup_tweens: Array[Tween] = []
 # 模块：生命周期 —— 初始化音频、棋盘、菜单与游戏
 func _ready() -> void:
 	# 为主题默认字体（NotoSerifSC）添加 Emoji 回退，确保按钮中的 emoji 正常显示
-	var sc_font: FontFile = load("res://assets/fonts/NotoSerifSC-Regular.otf")
-	if sc_font != null:
-		sc_font.fallbacks = [EMOJI_FONT]
+	if chinese_font != null:
+		chinese_font.fallbacks = [EMOJI_FONT]
 
 	randomize()
 	board_manager.setup(grid_container, aspect_ratio_container, board_center, cell_scene)
@@ -791,6 +791,7 @@ func _show_toast(message: String) -> void:
 	toast.text = message
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	toast.add_theme_font_override("font", chinese_font)
 	toast.add_theme_font_size_override("font_size", 28)
 	toast.add_theme_color_override("font_outline_color", Color.BLACK)
 	toast.add_theme_constant_override("outline_size", 5)
