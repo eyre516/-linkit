@@ -48,7 +48,7 @@ const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 
 const SCHEME_1_FLOATING_TEXT_ENABLED := true  # 方案 1：消除位置飘字（可独立开关）
 
 # 自定义弹窗类型与回调
-enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, MODE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT}
+enum DialogType {WELCOME, RULES, ABOUT, SHORTCUTS, SCORE_RULES, MODE_RULES, LEVEL_COMPLETE, LEADERBOARD, NAME_INPUT, ENDLESS_DIFFICULTY}
 var _current_dialog_type: DialogType = DialogType.WELCOME
 var _dialog_callback: Callable = Callable()
 
@@ -101,6 +101,12 @@ var _leaderboard_type: LeaderboardType = LeaderboardType.SCORE
 const LEADERBOARD_MAX_ENTRIES := 1000
 const LEADERBOARD_ENTRIES_PER_PAGE := 10
 const SETTINGS_FILE := "user://settings.json"
+
+# 无尽模式专用难度（1=初级，2=中级，3=高级）
+var _endless_difficulty: int = 1
+
+# 五个模式开屏介绍弹窗的统一字号
+const MODE_INTRO_FONT_SIZE := 28
 
 # 本次通关的每关统计：关卡、用时、提示次数、洗牌次数
 var _session_level_stats: Array[Dictionary] = []
@@ -169,6 +175,7 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var score_gain_label: RichTextLabel = %ScoreGainLabel
 @onready var combo_label: RichTextLabel = %ComboLabel
 @onready var compact_combo_label: RichTextLabel = %CompactComboLabel
+@onready var endless_info_label: RichTextLabel = %EndlessInfoLabel
 @onready var game_over_panel: PanelContainer = %GameOverPanel
 @onready var game_over_label: Label = %GameOverLabel
 @onready var game_over_stats_label: RichTextLabel = %GameOverStatsLabel
@@ -177,6 +184,7 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var view_leaderboard_button: Button = %ViewLeaderboardButton
 @onready var return_to_menu_button: Button = %ReturnToMenuButton
 @onready var auto_shuffle_hint: Label = %AutoShuffleHint
+@onready var canvas_layer: CanvasLayer = %CanvasLayer
 @onready var pause_label: Label = %PauseLabel
 @onready var pause_dim: ColorRect = %PauseDim
 @onready var pause_menu_panel: PanelContainer = %PauseMenuPanel
@@ -205,6 +213,9 @@ var _score_popup_tweens: Array[Tween] = []
 @onready var welcome_rule_label: RichTextLabel = %WelcomeRuleLabel
 @onready var welcome_must_read_label: RichTextLabel = %WelcomeMustReadLabel
 @onready var welcome_op_label: RichTextLabel = %WelcomeOpLabel
+
+@onready var endless_difficulty_panel: VBoxContainer = %EndlessDifficultyPanel
+@onready var endless_difficulty_buttons: Array[Button] = [%EndlessDifficulty1, %EndlessDifficulty2, %EndlessDifficulty3]
 
 @onready var leaderboard_panel: VBoxContainer = %LeaderboardPanel
 @onready var leaderboard_content: RichTextLabel = %LeaderboardContent
@@ -251,6 +262,11 @@ func _ready() -> void:
 	leaderboard_type_speedrun_button.pressed.connect(_on_leaderboard_type_pressed.bind(LeaderboardType.SPEEDRUN))
 	export_leaderboard_button.pressed.connect(_on_export_leaderboard_pressed)
 	share_leaderboard_button.pressed.connect(_on_share_leaderboard_pressed)
+
+	# 无尽模式难度选择按钮
+	for i in range(endless_difficulty_buttons.size()):
+		endless_difficulty_buttons[i].pressed.connect(_on_endless_difficulty_selected.bind(i + 1))
+		endless_difficulty_buttons[i].focus_mode = Control.FOCUS_NONE
 
 	# 暂停菜单按钮
 	%ResumeButton.pressed.connect(_on_resume_button_pressed)
@@ -337,12 +353,17 @@ func _update_level_info() -> void:
 	match current_mode:
 		GameMode.CHALLENGE:
 			level_label.text = "[color=#8C5C33]倒计时模式[/color]"
+			endless_info_label.hide()
 		GameMode.ENDLESS:
-			level_label.text = "[color=#8C5C33]无尽模式[/color]"
+			level_label.text = "[color=#8C5C33]无尽模式：[/color][color=#264D61]%s[/color]" % difficulty_name
+			endless_info_label.text = "[color=#8C5C33]无尽模式：[/color][color=#264D61]%s - %s[/color]" % [difficulty_name, _get_level_name(current_level)]
+			endless_info_label.show()
 		GameMode.DAILY:
 			level_label.text = "[color=#8C5C33]每日挑战：[/color][color=#264D61]%s[/color]" % _get_level_name(current_level)
+			endless_info_label.hide()
 		_:
 			level_label.text = "[color=#8C5C33]关卡 %d/%d：[/color][color=#264D61]%s[/color]" % [current_level, level_total, _get_level_name(current_level)]
+			endless_info_label.hide()
 	_update_pairs_label()
 
 
@@ -424,6 +445,23 @@ func _on_level_complete() -> void:
 	if current_mode == GameMode.CHALLENGE:
 		# 倒计时模式：清空棋盘后立即生成新棋盘，继续计时刷分
 		board_manager.generate_board()
+		board_manager.update_all_cells(selected_index)
+		_update_pairs_label()
+		_update_ui()
+		return
+	if current_mode == GameMode.ENDLESS:
+		# 无尽模式：清空棋盘后随机进入该难度下的一关
+		var max_level := _get_max_level_for_difficulty(_endless_difficulty)
+		current_level = randi() % max_level + 1
+		if current_level == 2:
+			_roll_level2_direction()
+		if current_level == 4:
+			_roll_level4_direction()
+		_update_level_info()
+		var endless_diff_name := "初级" if _endless_difficulty == 1 else ("中级" if _endless_difficulty == 2 else "高级")
+		_show_toast("无尽模式：%s - %s" % [endless_diff_name, _get_level_name(current_level)], 3.0, 40)
+		board_manager.generate_board()
+		score_manager.setup_level(board_manager.get_rows(), board_manager.get_cols(), current_level, current_difficulty)
 		board_manager.update_all_cells(selected_index)
 		_update_pairs_label()
 		_update_ui()
@@ -785,25 +823,36 @@ func _on_share_leaderboard_pressed() -> void:
 	_show_toast("已复制榜首成绩到剪贴板")
 
 
-# 在屏幕中央显示一个临时提示（toast）
-func _show_toast(message: String) -> void:
+# 在屏幕上方（棋盘与倒计时进度条之间的空闲区域）显示一个临时提示（toast），默认持续约 2.5 秒
+func _show_toast(message: String, duration: float = 2.5, font_size: int = 28) -> void:
 	var toast := Label.new()
 	toast.text = message
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toast.add_theme_font_override("font", chinese_font)
-	toast.add_theme_font_size_override("font_size", 28)
+	toast.add_theme_font_size_override("font_size", font_size)
 	toast.add_theme_color_override("font_outline_color", Color.BLACK)
 	toast.add_theme_constant_override("outline_size", 5)
-	toast.anchors_preset = Control.PRESET_CENTER
-	toast.offset_left = -300
-	toast.offset_top = -60
-	toast.offset_right = 300
-	toast.offset_bottom = 60
-	add_child(toast)
 
+	# 水平居中，宽度固定；垂直放在顶部信息栏与棋盘之间的空闲区域中央
+	var toast_width := 720.0
+	var toast_height := 80.0
+	var top_bar := compact_top_bar if compact_top_bar.visible else info_bar
+	var top_y := top_bar.global_position.y + top_bar.size.y
+	var board_top_y := board_center.global_position.y
+	var gap_center := (top_y + board_top_y) / 2.0
+	var toast_y := clampf(gap_center - toast_height / 2.0, top_y + 8.0, board_top_y - toast_height - 8.0)
+
+	# 直接用 position/size 设置，避免动态创建节点的 layout_mode 导致锚点偏移
+	var viewport_size := get_viewport().get_visible_rect().size
+	var toast_x := (viewport_size.x - toast_width) / 2.0
+	toast.position = Vector2(toast_x, toast_y)
+	toast.size = Vector2(toast_width, toast_height)
+	canvas_layer.add_child(toast)
+
+	var fade_duration := maxf(0.1, duration - 0.5)
 	var tween := create_tween()
-	tween.tween_property(toast, "modulate:a", 0.0, 2.0).set_delay(0.5)
+	tween.tween_property(toast, "modulate:a", 0.0, fade_duration).set_delay(0.5)
 	tween.finished.connect(func() -> void:
 		toast.queue_free()
 	)
@@ -1198,58 +1247,60 @@ func _on_mode_menu_item_pressed(index: int) -> void:
 		GameMode.CHALLENGE:
 			_show_challenge_intro_dialog()
 		GameMode.ENDLESS:
-			_show_endless_intro_dialog()
+			_show_endless_difficulty_dialog()
 		GameMode.DAILY:
 			_show_daily_intro_dialog()
+
+
+# 显示无尽模式难度选择弹窗
+func _show_endless_difficulty_dialog() -> void:
+	_show_custom_dialog(DialogType.ENDLESS_DIFFICULTY, "选择无尽模式难度", "", "请选择要挑战的难度")
+
+
+# 无尽模式难度选择后，设置难度并开始游戏
+func _on_endless_difficulty_selected(difficulty: int) -> void:
+	_endless_difficulty = difficulty
+	_hide_custom_dialog()
+	restart_game()
 
 
 # 显示挑战模式介绍弹窗，关闭后再开始游戏
 func _show_challenge_intro_dialog() -> void:
 	var content := "[center]\n\n"
-	content += "[color=#FFF8F0][font_size=24]• 固定 [color=#E07A82][b]2 分钟[/b][/color] 倒计时[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 消除 [color=#E07A82][b]不会恢复[/b][/color] 时间[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 清空后立即生成 [color=#66ff66][b]新棋盘[/b][/color]，无限续关[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 目标：在限制时间内挑战获得高分！[/font_size][/color][/center]"
+	content += "[color=#FFF8F0][font_size=%d]• 固定 [color=#E07A82][b]2 分钟[/b][/color] 倒计时[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 消除 [color=#E07A82][b]不会恢复[/b][/color] 时间[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 清空后立即生成 [color=#66ff66][b]新棋盘[/b][/color]，无限续关[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 目标：在限制时间内挑战获得高分！[/font_size][/color][/center]" % MODE_INTRO_FONT_SIZE
 	_show_custom_dialog(DialogType.RULES, "挑战模式", content, "(点击任意位置或按任意键开始)", restart_game)
-
-
-# 显示无尽模式介绍弹窗，关闭后再开始游戏
-func _show_endless_intro_dialog() -> void:
-	var content := "[center]\n\n"
-	content += "[color=#FFF8F0][font_size=24]• 每消除一对，上方会 [color=#66ff66][b]下落新牌[/b][/color] 补充空位[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 棋盘 [color=#66ff66][b]始终充满[/b][/color]，不会出现死局[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 倒计时耗尽即结束[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 目标：在倒计时结束前挑战最高分！[/font_size][/color][/center]"
-	_show_custom_dialog(DialogType.RULES, "无尽模式", content, "(点击任意位置或按任意键开始)", restart_game)
 
 
 # 显示每日挑战模式介绍弹窗，关闭后再开始游戏
 func _show_daily_intro_dialog() -> void:
 	var content := "[center]\n\n"
-	content += "[color=#FFF8F0][font_size=24]• 使用 [color=#5AB4E0][b]当日日期[/b][/color] 作为固定 Seed[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 所有玩家当天面对 [color=#5AB4E0][b]完全相同[/b][/color] 的棋盘[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 通关后可比拼分数与用时[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 每天只有一次机会，尽情挑战吧！[/font_size][/color][/center]"
+	content += "[color=#FFF8F0][font_size=%d]• 使用 [color=#5AB4E0][b]当日日期[/b][/color] 作为固定 Seed[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 所有玩家当天面对 [color=#5AB4E0][b]完全相同[/b][/color] 的棋盘[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 通关后可比拼分数与用时[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 每天只有一次机会，尽情挑战吧！[/font_size][/color][/center]" % MODE_INTRO_FONT_SIZE
 	_show_custom_dialog(DialogType.RULES, "每日挑战", content, "(点击任意位置或按任意键开始)", restart_game)
 
 
 # 显示休闲模式介绍弹窗，关闭后再开始游戏
 func _show_casual_intro_dialog() -> void:
 	var content := "[center]\n\n"
-	content += "[color=#FFF8F0][font_size=24]• 提示与洗牌 [color=#66ff66][b]无限使用[/b][/color][/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 无分数压力，轻松练习[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 适合熟悉规则与图案[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 尽情享受消除乐趣！[/font_size][/color][/center]"
+	content += "[color=#FFF8F0][font_size=%d]• 提示与洗牌 [color=#66ff66][b]无限使用[/b][/color][/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 无分数压力，轻松练习[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 适合熟悉规则与图案[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 尽情享受消除乐趣！[/font_size][/color][/center]" % MODE_INTRO_FONT_SIZE
 	_show_custom_dialog(DialogType.RULES, "休闲模式", content, "(点击任意位置或按任意键开始)", restart_game)
 
 
 # 显示竞技模式介绍弹窗，关闭后再开始游戏
 func _show_competitive_intro_dialog() -> void:
 	var content := "[center]\n\n"
-	content += "[color=#FFF8F0][font_size=24]• 每关提示与洗牌次数 [color=#E07A82][b]有限[/b][/color][/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 第 1–7 关：5 次提示、2 次洗牌[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 第 8–10 关：8 次提示、3 次洗牌[/font_size][/color]\n"
-	content += "[color=#FFF8F0][font_size=24]• 次数用尽后对应按钮变灰，谨慎使用！[/font_size][/color][/center]"
+	content += "[color=#FFF8F0][font_size=%d]• 每关提示与洗牌次数 [color=#E07A82][b]有限[/b][/color][/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 第 1–7 关：5 次提示、2 次洗牌[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 第 8–10 关：8 次提示、3 次洗牌[/font_size][/color]\n" % MODE_INTRO_FONT_SIZE
+	content += "[color=#FFF8F0][font_size=%d]• 次数用尽后对应按钮变灰，谨慎使用！[/font_size][/color][/center]" % MODE_INTRO_FONT_SIZE
 	_show_custom_dialog(DialogType.RULES, "竞技模式", content, "(点击任意位置或按任意键开始)", restart_game)
 
 
@@ -1352,7 +1403,7 @@ func _on_help_menu_item_pressed(index: int) -> void:
 			mode_rules += "[/cell]"
 			mode_rules += "[cell padding=30,0,0,0]"
 			mode_rules += "[color=#5AB4E0][b]无尽模式[/b][/color]\n"
-			mode_rules += "每消除一对，上方会下落新牌补充空位，棋盘始终充满。在倒计时结束前挑战自己的最高分数。"
+			mode_rules += "先选择初级/中级/高级，清空棋盘后会随机出现该难度下的一关，倒计时结束前挑战最高分。"
 			mode_rules += "[/cell]"
 			mode_rules += "[cell padding=0,0,30,0]"
 			mode_rules += "[color=#5AB4E0][b]竞技模式[/b][/color]\n"
@@ -1429,6 +1480,7 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 		dialog_hint.hide()
 		leaderboard_panel.show()
 		welcome_panel.hide()
+		endless_difficulty_panel.hide()
 	elif type == DialogType.WELCOME:
 		dialog_content.hide()
 		dialog_hint.show()
@@ -1436,6 +1488,15 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 		dialog_hint.modulate = Color.WHITE
 		leaderboard_panel.hide()
 		welcome_panel.show()
+		endless_difficulty_panel.hide()
+	elif type == DialogType.ENDLESS_DIFFICULTY:
+		dialog_content.hide()
+		dialog_hint.show()
+		dialog_hint.text = hint
+		dialog_hint.modulate = Color.WHITE
+		leaderboard_panel.hide()
+		welcome_panel.hide()
+		endless_difficulty_panel.show()
 	else:
 		dialog_content.show()
 		dialog_content.text = content
@@ -1446,6 +1507,7 @@ func _show_custom_dialog(type: DialogType, title: String, content: String, hint:
 		dialog_hint.modulate = Color.WHITE
 		leaderboard_panel.hide()
 		welcome_panel.hide()
+		endless_difficulty_panel.hide()
 
 	custom_dialog.show()
 	_set_paused(true, false)
@@ -1464,6 +1526,7 @@ func _hide_custom_dialog() -> void:
 	custom_dialog.hide()
 	leaderboard_panel.hide()
 	welcome_panel.hide()
+	endless_difficulty_panel.hide()
 	_set_paused(false)
 	match _current_dialog_type:
 		DialogType.LEVEL_COMPLETE:
@@ -1498,6 +1561,9 @@ func _input(event: InputEvent) -> void:
 			return
 		# 排行榜弹窗由按钮自行处理，不响应全局关闭
 		if _current_dialog_type == DialogType.LEADERBOARD:
+			return
+		# 无尽模式难度选择弹窗由按钮自行处理
+		if _current_dialog_type == DialogType.ENDLESS_DIFFICULTY:
 			return
 		if (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventMouseButton and event.pressed):
 			_hide_custom_dialog()
@@ -1691,7 +1757,13 @@ func restart_game(reset_progress: bool = true) -> void:
 			score_manager.time_bonus_enabled = true
 			score_manager.duration_limited = false
 			board_manager.randomize_seed()
+			current_difficulty = _endless_difficulty
 			current_level = 1
+			Cell.set_level(current_difficulty)
+			Cell.clear_texture_cache()
+			board_manager.setup_grid(_on_cell_clicked)
+			var endless_diff_name := "初级" if _endless_difficulty == 1 else ("中级" if _endless_difficulty == 2 else "高级")
+			_show_toast("无尽模式：%s - %s" % [endless_diff_name, _get_level_name(current_level)], 3.0, 40)
 		GameMode.DAILY:
 			score_manager.max_time = ScoreManager.MAX_TIME
 			score_manager.time_bonus_enabled = true
@@ -2015,10 +2087,6 @@ func _on_cell_clicked(index: int) -> void:
 	var collapse_tween := board_manager.apply_collapse(current_level, _level2_direction, _level4_direction)
 	if collapse_tween != null:
 		await collapse_tween.finished
-
-	# 无尽模式：坍塌后上方下落新牌，保持棋盘始终充满
-	if current_mode == GameMode.ENDLESS:
-		board_manager.drop_tiles(board_manager.get_skin_tile_count())
 
 	board_manager.update_all_cells(selected_index)
 	_update_ui()

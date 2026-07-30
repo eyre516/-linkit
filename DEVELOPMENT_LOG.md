@@ -3648,3 +3648,286 @@ cd assets/连连看例子
 
 - 静态检查无语法错误。
 - 建议在 Godot 编辑器中运行项目，依次打开：欢迎弹窗、暂停菜单、设置面板、游戏结束面板、各模式介绍弹窗、排行榜弹窗，确认背景均为浅蓝色，标题与提示文字均为白色。
+
+
+---
+
+## 2026-07-29 12:31
+
+**原因**：用户希望无尽模式从“每消除一对立即补充新牌”改为“累计消除 50 个块之后再统一补充”。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 新增常量 `ENDLESS_REFILL_THRESHOLD := 50`，表示无尽模式累计消除多少块后触发补充。
+   - 新增状态变量 `_endless_tiles_removed: int = 0`，用于记录本轮无尽模式已消除的块数。
+   - 在 `restart_game()` 中重置 `_endless_tiles_removed = 0`。
+   - 修改 `_on_cell_clicked()` 中无尽模式的补充逻辑：
+	 - 每次成功消除一对后 `_endless_tiles_removed += 2`。
+	 - 仅当 `_endless_tiles_removed >= ENDLESS_REFILL_THRESHOLD` 时才调用 `board_manager.drop_tiles()` 补充新牌，并重置计数器。
+   - 更新 `_show_endless_intro_dialog()` 的说明文字：改为“每消除 50 个块，上方会下落新牌补充空位”。
+   - 更新帮助菜单“模式说明”中无尽模式的描述，同步为新的 50 块补充规则。
+
+**影响位置**：
+
+- `game.gd` 第 103–105 行：新增 `ENDLESS_REFILL_THRESHOLD` 常量与 `_endless_tiles_removed` 变量。
+- `game.gd` 第 1728 行：`restart_game()` 中重置计数器。
+- `game.gd` 第 2022–2027 行：无尽模式消除后的补充逻辑。
+- `game.gd` 第 1219–1224 行：无尽模式介绍弹窗文本。
+- `game.gd` 第 1355 行：帮助菜单模式说明中无尽模式描述。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中运行无尽模式：
+  - 前 24 次消除（共 48 块）后棋盘应逐渐出现空位，不会补充新牌。
+  - 第 25 次消除（累计 50 块）后应立即下落新牌，将棋盘重新补满。
+  - 之后每累计消除 50 个块再次补充。
+  - 切换到其他模式或点击“重新开始”后计数器应重置。
+
+
+---
+
+## 2026-07-29 12:35
+
+**原因**：用户希望五个模式的开屏介绍弹窗字体变大一些。
+
+**改动**：
+
+1. **`game.gd`**：
+   - 新增常量 `MODE_INTRO_FONT_SIZE := 28`，统一控制五个模式介绍弹窗的字号。
+   - 修改 `_show_challenge_intro_dialog()`、`_show_endless_intro_dialog()`、`_show_daily_intro_dialog()`、`_show_casual_intro_dialog()`、`_show_competitive_intro_dialog()` 五个函数：
+	 - 将内容字符串中的 `[font_size=24]` 改为 `[font_size=%d]`，并通过 `% MODE_INTRO_FONT_SIZE` 统一使用 28 号字体。
+	 - 无尽模式第一行因同时需要填充阈值数字，使用数组格式化 `% [MODE_INTRO_FONT_SIZE, ENDLESS_REFILL_THRESHOLD]`。
+
+**影响位置**：
+
+- `game.gd` 第 109 行：新增 `MODE_INTRO_FONT_SIZE` 常量。
+- `game.gd` 第 1217–1230 行：挑战模式介绍弹窗文本。
+- `game.gd` 第 1234–1246 行：无尽模式介绍弹窗文本。
+- `game.gd` 第 1250–1262 行：每日挑战介绍弹窗文本。
+- `game.gd` 第 1266–1278 行：休闲模式介绍弹窗文本。
+- `game.gd` 第 1282–1294 行：竞技模式介绍弹窗文本。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中分别切换五种模式，确认介绍弹窗内容文字比原来明显更大（28 号），且标题、提示文字大小不受影响。
+
+
+---
+
+## 2026-07-29 12:45
+
+**原因**：用户希望无尽模式改为：开始游戏前弹出难度选择弹窗；清空棋盘后随机出现该难度下的一关；无尽模式没有关卡进度判定，结束条件只有时间进度条耗尽。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 在 `CanvasLayer/CustomDialog/CenterContainer/VBoxContainer` 下新增 `EndlessDifficultyPanel`：
+	 - `DifficultyRow`（`HBoxContainer`）包含三个按钮 `EndlessDifficulty1/2/3`，分别显示“初级 / 中级 / 高级”。
+
+2. **`game.gd`**：
+   - 新增 `DialogType.ENDLESS_DIFFICULTY` 枚举值，用于标识无尽模式难度选择弹窗。
+   - 新增状态变量 `_endless_difficulty: int = 1`，记录玩家在无尽模式中选择难度。
+   - 新增节点引用：`endless_difficulty_panel`、`endless_difficulty_buttons`。
+   - 在 `_ready()` 中连接三个难度按钮的 `pressed` 信号到 `_on_endless_difficulty_selected(difficulty)`，并设置 `focus_mode = FOCUS_NONE`。
+   - 修改 `_on_mode_menu_item_pressed()`：切换到无尽模式时，不再显示介绍弹窗，而是调用 `_show_endless_difficulty_dialog()` 显示难度选择弹窗。
+   - 新增 `_show_endless_difficulty_dialog()`：显示标题为“选择无尽模式难度”、底部提示为“请选择要挑战的难度”的弹窗，展示三个难度按钮。
+   - 新增 `_on_endless_difficulty_selected(difficulty: int)`：记录选择的难度，关闭弹窗，然后调用 `restart_game()` 开始无尽模式。
+   - 修改 `_show_custom_dialog()`：增加 `ENDLESS_DIFFICULTY` 类型分支，隐藏 `DialogContent`、排行榜面板和欢迎面板，显示 `EndlessDifficultyPanel` 与 `DialogHint`。
+   - 修改 `_hide_custom_dialog()`：关闭弹窗时同时隐藏 `endless_difficulty_panel`。
+   - 修改 `_input()`：`ENDLESS_DIFFICULTY` 弹窗打开时不响应全局的“按任意键/点击关闭”，必须由按钮处理。
+   - 修改 `restart_game()` 的无尽模式分支：
+	 - 使用 `_endless_difficulty` 设置 `current_difficulty`。
+	 - `current_level = 1`。
+	 - 调用 `Cell.set_level()`、`Cell.clear_texture_cache()`、`board_manager.setup_grid()` 同步棋盘大小与图块资源。
+   - 修改 `_on_level_complete()`：新增无尽模式分支，清空棋盘后：
+	 - 根据 `_endless_difficulty` 获取该难度的最大关卡数（初级 5，中级/高级 10）。
+	 - 随机选择 `1 ~ max_level` 作为新关卡。
+	 - 随机决定第 2 关方向（左/右）和第 4 关方向（上/下）。
+	 - 调用 `board_manager.generate_board()` 生成新棋盘。
+	 - 调用 `score_manager.setup_level()` 同步新棋盘尺寸与关卡系数。
+	 - 刷新棋盘显示与 UI。
+   - 修改 `_on_cell_clicked()`：移除无尽模式原来的 `drop_tiles` 补充逻辑与 `_endless_tiles_removed` 计数器。
+   - 修改 `_update_level_info()`：无尽模式的关卡标签显示为“无尽模式：初级/中级/高级”。
+   - 更新帮助菜单“模式说明”中无尽模式的描述，改为新的关卡随机机制。
+   - 删除不再使用的 `_show_endless_intro_dialog()` 函数、`ENDLESS_REFILL_THRESHOLD` 常量和 `_endless_tiles_removed` 变量。
+
+**影响位置**：
+
+- `game.tscn` 第 843–871 行：新增 `EndlessDifficultyPanel` 及三个难度按钮。
+- `game.gd` 第 51 行：`DialogType` 枚举增加 `ENDLESS_DIFFICULTY`。
+- `game.gd` 第 106 行：新增 `_endless_difficulty` 变量。
+- `game.gd` 第 214–215 行：新增节点引用。
+- `game.gd` 第 264–267 行：难度按钮信号连接与 `focus_mode` 设置。
+- `game.gd` 第 1216 行：`_on_mode_menu_item_pressed()` 无尽模式分支改为难度选择弹窗。
+- `game.gd` 第 1236–1244 行：新增 `_show_endless_difficulty_dialog()` 与 `_on_endless_difficulty_selected()`。
+- `game.gd` 第 1458–1490 行：`_show_custom_dialog()` 增加 `ENDLESS_DIFFICULTY` 分支。
+- `game.gd` 第 1505–1509 行：`_hide_custom_dialog()` 隐藏 `endless_difficulty_panel`。
+- `game.gd` 第 1545–1547 行：`_input()` 中 `ENDLESS_DIFFICULTY` 不响应全局关闭。
+- `game.gd` 第 1735–1744 行：`restart_game()` 无尽模式分支使用 `_endless_difficulty` 初始化。
+- `game.gd` 第 445–459 行：`_on_level_complete()` 新增无尽模式随机新关卡逻辑。
+- `game.gd` 第 2079–2081 行：`_on_cell_clicked()` 移除无尽模式 `drop_tiles` 逻辑。
+- `game.gd` 第 355 行：`_update_level_info()` 无尽模式显示难度。
+- `game.gd` 第 1384–1385 行：帮助菜单模式说明更新。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中测试：
+  - 切换到无尽模式时，先弹出“选择无尽模式难度”弹窗，含初级/中级/高级三个按钮。
+  - 选择初级后，棋盘为初级大小（7×12），初始关卡为 1（不变）。
+  - 清空棋盘后，随机进入初级的 1–5 关之一，棋盘重新生成，计时继续。
+  - 选择中级/高级后，棋盘为对应大小，清空后随机进入 1–10 关之一。
+  - 无尽模式不会因“通关”结束，只有倒计时条耗尽时才结束。
+  - 其他模式（休闲、竞技、挑战、每日）不受影响。
+
+
+---
+
+## 2026-07-29 12:55
+
+**原因**：用户希望无尽模式每进入一关都在屏幕中央弹出 3 秒字幕提示当前难度与关卡名，并在右上角持续显示本关的难度与关卡名。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 在 `VBoxContainer/InfoBar/HBoxContainer` 的 `TimerBar` 与 `ComboLabel` 之间新增 `EndlessInfoLabel`（`RichTextLabel`）：
+	 - 默认隐藏，字号 24，显示格式为“无尽模式：初级 - 不变”。
+
+2. **`game.gd`**：
+   - 新增节点引用 `endless_info_label`。
+   - 修改 `_show_toast(message, duration)`：新增可选 `duration` 参数（默认 2.5 秒），用于控制字幕停留时间。
+   - 修改 `_update_level_info()`：
+	 - 无尽模式下，`level_label` 显示“无尽模式：初级/中级/高级”。
+	 - 无尽模式下，`endless_info_label` 显示“无尽模式：{难度} - {关卡名}”并显示。
+	 - 其他模式下隐藏 `endless_info_label`。
+   - 修改 `restart_game()` 的无尽模式分支：游戏开始时（第一关）调用 `_show_toast(..., 3.0)`，在屏幕中央弹出 3 秒字幕，提示当前难度与关卡名。
+   - 修改 `_on_level_complete()` 的无尽模式分支：清空棋盘进入随机新关卡后，调用 `_show_toast(..., 3.0)` 弹出 3 秒字幕提示。
+
+**影响位置**：
+
+- `game.tscn` 第 292–305 行：新增 `EndlessInfoLabel` 节点。
+- `game.gd` 第 170 行：新增 `endless_info_label` 引用。
+- `game.gd` 第 355–365 行：`_update_level_info()` 更新右上角无尽模式信息。
+- `game.gd` 第 1754–1755 行：`restart_game()` 无尽模式第一关字幕提示。
+- `game.gd` 第 453 行：`_on_level_complete()` 无尽模式切换新关卡字幕提示。
+- `game.gd` 第 818–839 行：`_show_toast()` 支持自定义持续时间。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中测试：
+  - 进入无尽模式选择初级，开局时屏幕中央弹出 3 秒字幕“无尽模式：初级 - 不变”。
+  - InfoBar 右上角显示“无尽模式：初级 - 不变”。
+  - 清空棋盘后随机进入下一关，再次弹出 3 秒字幕提示新的难度与关卡名，右上角标签同步更新。
+  - 切换到休闲/竞技/挑战/每日模式时，右上角 `EndlessInfoLabel` 隐藏。
+
+
+---
+
+## 2026-07-29 14:07
+
+**原因**：用户反馈无尽模式每关弹出的字幕提示（如“无尽模式：初级 - 不变”）位置太靠左上角，要求水平居中、字号稍大，并显示在棋盘与倒计时进度条之间的空闲区域。
+
+**改动**：
+
+1. **`game.tscn`**：
+   - 为根节点下的 `CanvasLayer` 开启 `unique_name_in_owner`，方便脚本通过 `%CanvasLayer` 引用。
+
+2. **`game.gd`**：
+   - 新增节点引用 `canvas_layer: CanvasLayer = %CanvasLayer`。
+   - 重写 `_show_toast(message, duration, font_size)`：
+	 - 新增可选 `font_size` 参数（默认 28）。
+	 - toast 不再作为 `Game` 的直接子节点，而是添加到 `CanvasLayer`，避免受根节点布局/尺寸影响导致偏左上。
+	 - 水平固定居中（宽度 720）。
+	 - 垂直位置动态计算：取当前可见顶部栏（`info_bar` 或 `compact_top_bar`）底部与棋盘顶部（`board_center`）之间的空隙中央，并限制在可用范围内，确保字幕落在棋盘与倒计时进度条之间的空闲区域。
+   - 无尽模式两处字幕调用（`restart_game()` 与 `_on_level_complete()`）传入 `font_size = 40`，使关卡提示字号更大。
+
+**影响位置**：
+
+- `game.tscn` 第 650 行：`CanvasLayer` 增加 `unique_name_in_owner = true`。
+- `game.gd` 第 186 行：新增 `canvas_layer` 引用。
+- `game.gd` 第 825–852 行：`_show_toast()` 改用 `CanvasLayer` 并支持自定义字号与动态垂直定位。
+- `game.gd` 第 461 行：`_on_level_complete()` 无尽模式切换关卡字幕改为 40 号字。
+- `game.gd` 第 1755 行：`restart_game()` 无尽模式开局字幕改为 40 号字。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中测试：
+  - 进入无尽模式选择任意难度，开局字幕水平居中、字号明显变大，位于顶部信息栏与棋盘之间。
+  - 清空棋盘进入下一关时，新弹出的字幕同样居中且位置正确。
+  - 切换到紧凑顶部 UI 后触发新关卡，字幕仍能避开计时条与棋盘显示。
+  - 其他模式/普通 toast（如排行榜导出提示）保持默认 28 号字，位置同样居中且不靠左上。
+
+
+---
+
+## 2026-07-29 14:18
+
+**原因**：用户反馈无尽模式关卡提示字幕仍然太靠左，要求进一步向右移动到视觉中心附近。
+
+**改动**：
+
+1. **`game.gd` 第 837–850 行（`_show_toast`）**：
+   - 移除 `anchors_preset` 与 `offset_*` 的写法。
+   - 改为直接设置 `position` 与 `size`，避免动态创建的 `Label` 默认处于 `LAYOUT_MODE_POSITION` 导致锚点失效、字幕偏左甚至出界。
+   - 水平位置使用 `get_viewport().get_visible_rect().size.x` 计算，确保提示框真正居中于屏幕/视觉中心。
+
+**影响位置**：
+
+- `game.gd` 第 837–850 行：`_show_toast()` 的定位逻辑。
+
+**验证**：
+
+- 静态检查无语法错误。
+- 建议在编辑器中运行无尽模式，确认关卡提示文字整体位于屏幕水平中心，不再偏左。
+
+
+---
+
+## 2026-07-30 16:30
+
+**原因**：用户反馈坍塌动画有时出现“额外动作”——同一列应向下移动的格子却有其他行的格子参与进来，导致异常闪动。根本原因是原动画按**图案类型全局匹配**旧/新位置，相同类型的图块会跨行、跨列错误配对。
+
+**改动**：
+
+1. **`managers/board_manager.gd` 第 581–600 行（`apply_collapse`）**：
+   - 新增“唯一 ID 索引棋盘”`original_index_board`，用 `r * cols + c + 1` 为每个非空格标记唯一 ID。
+   - 坍塌时把同一规则分别应用到 ID 棋盘和真实棋盘上。
+   - 通过对比 ID 棋盘坍塌前后的位置，精确得出每个格子的真实移动路径，不再依赖图案类型做全局匹配。
+
+2. **`managers/board_manager.gd` 第 603–631 行（新增 `_apply_collapse_to_board`）**：
+   - 把原 `apply_collapse` 中的 `match level` 分发逻辑提取为可复用的辅助函数。
+   - 该函数可同时作用于真实棋盘与追踪 ID 棋盘，确保两次坍塌结果完全一致。
+
+3. **`managers/board_manager.gd` 第 634–663 行（新增 `_build_movements_from_index_board`）**：
+   - 建立 `ID → 原始位置` 映射。
+   - 遍历坍塌后的 ID 棋盘，把每个非零 ID 的“新位置”与“原始位置”对比，仅在位置变化时生成一条移动记录。
+   - 删除原 `_build_movement_map` 的按类型全局配对逻辑。
+
+4. **`managers/board_manager.gd` 第 707–774 行（`_animate_collapse` 改为 `_animate_collapse_with_movements`）**：
+   - 直接接收精确移动列表，不再内部按类型重新配对。
+   - **调整执行顺序**：先创建幽灵（此时源格子仍显示坍塌前纹理），再更新目标格子为新图案并隐藏。
+   - 在创建幽灵的同时立即隐藏源格子，避免幽灵与真实格子同帧重叠造成闪动。
+
+5. **`managers/board_manager.gd` 第 841–1149 行（全部 `_collapse_*` 函数）**：
+   - 所有坍塌实现函数增加 `target_board: Array` 参数，内部操作从 `self.board` 改为传入的 `target_board`。
+   - 删除旧的 `_animate_collapse(old_board, duration)` 签名，确保不再被误用。
+
+**影响位置**：
+
+- `managers/board_manager.gd`：
+  - 第 581–600 行：`apply_collapse`
+  - 第 603–631 行：`_apply_collapse_to_board`
+  - 第 634–663 行：`_build_movements_from_index_board`
+  - 第 707–774 行：`_animate_collapse_with_movements`
+  - 第 841–1149 行：`_collapse_left` / `_collapse_right` / `_collapse_up` / `_collapse_down` / `_collapse_outward` / `_collapse_inward` / `_collapse_horizontal_expand` / `_collapse_vertical_expand` / `_collapse_horizontal_converge` / `_collapse_vertical_converge` / `_collapse_quadrant_spread`
+
+**验证**：
+
+- 静态检查无语法错误（本机未安装 Godot，无法运行场景）。
+- 建议在编辑器中重点验证第 4 关“向下坍塌”：消除后同一列的剩余图块应仅在该列内向下滑动，不应出现其他列/行的图块横穿棋盘。
+- 同时检查撤销/重做：撤销后棋盘应恢复到坍塌前状态，重做后恢复到坍塌后状态（动画不反向属于预期行为）。

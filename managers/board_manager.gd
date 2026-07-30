@@ -582,71 +582,82 @@ func apply_collapse(level: int, level2_dir: int, level4_dir: int, duration: floa
 	if level <= 1:
 		return null
 
-	var old_board := board.duplicate(true)
+	# 用唯一 ID 棋盘追踪每个格子的真实来源，避免按图案类型全局匹配导致跨行/跨列错误动画
+	var original_index_board: Array = []
+	var cols := get_cols()
+	for r in range(get_rows()):
+		original_index_board.append([])
+		for c in range(cols):
+			original_index_board[r].append(0 if board[r][c] == 0 else (r * cols + c + 1))
+
+	var collapsed_index_board := original_index_board.duplicate(true)
+	_apply_collapse_to_board(collapsed_index_board, level, level2_dir, level4_dir)
+
+	# 对真实棋盘应用相同坍塌
+	_apply_collapse_to_board(board, level, level2_dir, level4_dir)
+
+	var movements := _build_movements_from_index_board(original_index_board, collapsed_index_board)
+	return _animate_collapse_with_movements(movements, duration)
+
+
+# 将坍塌规则应用到指定棋盘（用于真实棋盘或追踪 ID 棋盘）
+func _apply_collapse_to_board(target_board: Array, level: int, level2_dir: int, level4_dir: int) -> void:
 	match level:
 		2:
 			match level2_dir:
 				Level2Dir.LEFT:
-					_collapse_left()
+					_collapse_left(target_board)
 				Level2Dir.RIGHT:
-					_collapse_right()
+					_collapse_right(target_board)
 		3:
-			_collapse_outward()
+			_collapse_outward(target_board)
 		4:
 			match level4_dir:
 				Level4Dir.UP:
-					_collapse_up()
+					_collapse_up(target_board)
 				Level4Dir.DOWN:
-					_collapse_down()
+					_collapse_down(target_board)
 		5:
-			_collapse_inward()
+			_collapse_inward(target_board)
 		6:
-			_collapse_horizontal_expand()
+			_collapse_horizontal_expand(target_board)
 		7:
-			_collapse_vertical_expand()
+			_collapse_vertical_expand(target_board)
 		8:
-			_collapse_horizontal_converge()
+			_collapse_horizontal_converge(target_board)
 		9:
-			_collapse_vertical_converge()
+			_collapse_vertical_converge(target_board)
 		10:
-			_collapse_quadrant_spread()
-
-	return _animate_collapse(old_board, duration)
+			_collapse_quadrant_spread(target_board)
 
 
-# 对比坍塌前后的棋盘，按图案值匹配旧位置与新位置，生成移动列表
-func _build_movement_map(old_board: Array, new_board: Array) -> Array[Dictionary]:
+# 根据 ID 棋盘坍塌前后的位置变化，精确生成移动列表
+func _build_movements_from_index_board(original_index_board: Array, collapsed_index_board: Array) -> Array[Dictionary]:
 	var movements: Array[Dictionary] = []
-	var old_positions_by_type: Dictionary[int, Array] = {}
-	var new_positions_by_type: Dictionary[int, Array] = {}
+	var rows := get_rows()
+	var cols := get_cols()
 
-	for r in range(get_rows()):
-		for c in range(get_cols()):
-			var old_type: int = old_board[r][c]
-			if old_type != 0:
-				if not old_positions_by_type.has(old_type):
-					old_positions_by_type[old_type] = []
-				old_positions_by_type[old_type].append(Vector2i(r, c))
+	var old_pos_by_id: Dictionary[int, Vector2i] = {}
+	for r in range(rows):
+		for c in range(cols):
+			var id: int = original_index_board[r][c]
+			if id != 0:
+				old_pos_by_id[id] = Vector2i(r, c)
 
-			var new_type: int = new_board[r][c]
-			if new_type != 0:
-				if not new_positions_by_type.has(new_type):
-					new_positions_by_type[new_type] = []
-				new_positions_by_type[new_type].append(Vector2i(r, c))
-
-	for type: int in old_positions_by_type.keys():
-		var old_positions: Array = old_positions_by_type[type]
-		var new_positions: Array = new_positions_by_type.get(type, [])
-		# 坍塌不改变非空图案总数，因此 old/new 数量应相同
-		var count := mini(old_positions.size(), new_positions.size())
-		for i in range(count):
-			var old_pos: Vector2i = old_positions[i]
-			var new_pos: Vector2i = new_positions[i]
+	for r in range(rows):
+		for c in range(cols):
+			var id: int = collapsed_index_board[r][c]
+			if id == 0:
+				continue
+			var old_pos: Vector2i = old_pos_by_id.get(id, Vector2i(-1, -1))
+			if old_pos == Vector2i(-1, -1):
+				continue
+			var new_pos := Vector2i(r, c)
 			if old_pos != new_pos:
 				movements.append({
 					"old_pos": old_pos,
 					"new_pos": new_pos,
-					"tile_type": type,
+					"tile_type": 0,
 				})
 
 	return movements
@@ -694,8 +705,7 @@ func _create_ghost_from_cell(source_cell: Cell) -> Control:
 
 
 # 执行坍塌位移动画：源格子和目标格子暂时隐藏，由幽灵代替平移，图案大小始终不变
-func _animate_collapse(old_board: Array, duration: float) -> Tween:
-	var movements := _build_movement_map(old_board, board)
+func _animate_collapse_with_movements(movements: Array[Dictionary], duration: float) -> Tween:
 	if movements.is_empty():
 		return null
 
@@ -717,19 +727,7 @@ func _animate_collapse(old_board: Array, duration: float) -> Tween:
 		if not affected_indices.has(idx):
 			affected_indices.append(idx)
 
-	# 立即把实际棋盘更新到坍塌后的状态：目标位置写入新图案并隐藏，源格子也隐藏，由幽灵完成移动动画
-	for idx in destination_indices:
-		var cell: Cell = _grid_container.get_child(idx)
-		var pos := index_to_pos(idx)
-		cell.tile_type = board[pos.x][pos.y]
-		cell.modulate.a = 0.0
-
-	for idx in source_indices:
-		var cell: Cell = _grid_container.get_child(idx)
-		cell.reset_icon_scale_to_base()
-		cell.modulate.a = 0.0
-
-	# 创建幽灵层，使用 top_level 避免受 GridContainer 重新布局影响
+	# 先创建幽灵层，确保使用坍塌前的纹理；使用 top_level 避免受 GridContainer 重新布局影响
 	var ghost_parent := Control.new()
 	ghost_parent.name = "CollapseGhosts"
 	ghost_parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -742,6 +740,7 @@ func _animate_collapse(old_board: Array, duration: float) -> Tween:
 	tween.set_trans(Tween.TRANS_LINEAR)
 	tween.set_ease(Tween.EASE_IN_OUT)
 
+	var hidden_source_indices: Dictionary[int, bool] = {}
 	for movement in movements:
 		var source_idx := pos_to_index(movement.old_pos.x, movement.old_pos.y)
 		var source_cell: Cell = _grid_container.get_child(source_idx)
@@ -750,6 +749,19 @@ func _animate_collapse(old_board: Array, duration: float) -> Tween:
 		ghost_parent.add_child(ghost)
 		var target_pos := _get_cell_global_position(movement.new_pos.x, movement.new_pos.y)
 		tween.tween_property(ghost, "global_position", target_pos, duration)
+
+		# 立即隐藏源格子，避免幽灵与真实格子同帧重叠造成闪动
+		if not hidden_source_indices.has(source_idx):
+			source_cell.reset_icon_scale_to_base()
+			source_cell.modulate.a = 0.0
+			hidden_source_indices[source_idx] = true
+
+	# 创建幽灵后再把目标位置写入坍塌后的新图案并隐藏
+	for idx in destination_indices:
+		var cell: Cell = _grid_container.get_child(idx)
+		var pos := index_to_pos(idx)
+		cell.tile_type = board[pos.x][pos.y]
+		cell.modulate.a = 0.0
 
 	# 动画结束后立即清理幽灵并恢复实际格子可见，避免闪烁
 	tween.finished.connect(func() -> void:
@@ -828,53 +840,53 @@ func drop_tiles(tile_count: int) -> void:
 
 # ---------- 坍塌实现 ----------
 
-func _collapse_left() -> void:
+func _collapse_left(target_board: Array) -> void:
 	for r in range(get_rows()):
 		var new_row: Array[int] = []
 		for c in range(get_cols()):
-			if board[r][c] != 0:
-				new_row.append(board[r][c])
+			if target_board[r][c] != 0:
+				new_row.append(target_board[r][c])
 		while new_row.size() < get_cols():
 			new_row.append(0)
-		board[r] = new_row
+		target_board[r] = new_row
 
 
-func _collapse_right() -> void:
+func _collapse_right(target_board: Array) -> void:
 	for r in range(get_rows()):
 		var new_row: Array[int] = []
 		for c in range(get_cols()):
-			if board[r][c] != 0:
-				new_row.append(board[r][c])
+			if target_board[r][c] != 0:
+				new_row.append(target_board[r][c])
 		while new_row.size() < get_cols():
 			new_row.push_front(0)
-		board[r] = new_row
+		target_board[r] = new_row
 
 
-func _collapse_up() -> void:
+func _collapse_up(target_board: Array) -> void:
 	for c in range(get_cols()):
 		var new_col: Array[int] = []
 		for r in range(get_rows()):
-			if board[r][c] != 0:
-				new_col.append(board[r][c])
+			if target_board[r][c] != 0:
+				new_col.append(target_board[r][c])
 		while new_col.size() < get_rows():
 			new_col.append(0)
 		for r in range(get_rows()):
-			board[r][c] = new_col[r]
+			target_board[r][c] = new_col[r]
 
 
-func _collapse_down() -> void:
+func _collapse_down(target_board: Array) -> void:
 	for c in range(get_cols()):
 		var new_col: Array[int] = []
 		for r in range(get_rows()):
-			if board[r][c] != 0:
-				new_col.append(board[r][c])
+			if target_board[r][c] != 0:
+				new_col.append(target_board[r][c])
 		while new_col.size() < get_rows():
 			new_col.push_front(0)
 		for r in range(get_rows()):
-			board[r][c] = new_col[r]
+			target_board[r][c] = new_col[r]
 
 
-func _collapse_outward() -> void:
+func _collapse_outward(target_board: Array) -> void:
 	var center_r: int = int(get_rows() / 2.0)
 	var center_c: int = int(get_cols() / 2.0)
 
@@ -882,11 +894,11 @@ func _collapse_outward() -> void:
 		var left_part: Array[int] = []
 		var right_part: Array[int] = []
 		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				left_part.append(target_board[r][c])
 		for c in range(center_c, get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				right_part.append(target_board[r][c])
 
 		var new_left: Array[int] = left_part.duplicate()
 		while new_left.size() < center_c:
@@ -898,19 +910,19 @@ func _collapse_outward() -> void:
 		new_right.append_array(right_part)
 
 		for c in range(center_c):
-			board[r][c] = new_left[c]
+			target_board[r][c] = new_left[c]
 		for c in range(center_c, get_cols()):
-			board[r][c] = new_right[c - center_c]
+			target_board[r][c] = new_right[c - center_c]
 
 	for c in range(get_cols()):
 		var top_part: Array[int] = []
 		var bottom_part: Array[int] = []
 		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				top_part.append(target_board[r][c])
 		for r in range(center_r, get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				bottom_part.append(target_board[r][c])
 
 		var new_top: Array[int] = top_part.duplicate()
 		while new_top.size() < center_r:
@@ -922,12 +934,12 @@ func _collapse_outward() -> void:
 		new_bottom.append_array(bottom_part)
 
 		for r in range(center_r):
-			board[r][c] = new_top[r]
+			target_board[r][c] = new_top[r]
 		for r in range(center_r, get_rows()):
-			board[r][c] = new_bottom[r - center_r]
+			target_board[r][c] = new_bottom[r - center_r]
 
 
-func _collapse_inward() -> void:
+func _collapse_inward(target_board: Array) -> void:
 	var center_r: int = int(get_rows() / 2.0)
 	var center_c: int = int(get_cols() / 2.0)
 
@@ -935,11 +947,11 @@ func _collapse_inward() -> void:
 		var left_part: Array[int] = []
 		var right_part: Array[int] = []
 		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				left_part.append(target_board[r][c])
 		for c in range(center_c, get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				right_part.append(target_board[r][c])
 
 		var new_left: Array[int] = []
 		for i in range(center_c - left_part.size()):
@@ -951,19 +963,19 @@ func _collapse_inward() -> void:
 			new_right.append(0)
 
 		for c in range(center_c):
-			board[r][c] = new_left[c]
+			target_board[r][c] = new_left[c]
 		for c in range(center_c, get_cols()):
-			board[r][c] = new_right[c - center_c]
+			target_board[r][c] = new_right[c - center_c]
 
 	for c in range(get_cols()):
 		var top_part: Array[int] = []
 		var bottom_part: Array[int] = []
 		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				top_part.append(target_board[r][c])
 		for r in range(center_r, get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				bottom_part.append(target_board[r][c])
 
 		var new_top: Array[int] = []
 		for i in range(center_r - top_part.size()):
@@ -975,22 +987,22 @@ func _collapse_inward() -> void:
 			new_bottom.append(0)
 
 		for r in range(center_r):
-			board[r][c] = new_top[r]
+			target_board[r][c] = new_top[r]
 		for r in range(center_r, get_rows()):
-			board[r][c] = new_bottom[r - center_r]
+			target_board[r][c] = new_bottom[r - center_r]
 
 
-func _collapse_horizontal_expand() -> void:
+func _collapse_horizontal_expand(target_board: Array) -> void:
 	var center_c: int = int(get_cols() / 2.0)
 	for r in range(get_rows()):
 		var left_part: Array[int] = []
 		var right_part: Array[int] = []
 		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				left_part.append(target_board[r][c])
 		for c in range(center_c, get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				right_part.append(target_board[r][c])
 
 		var new_left: Array[int] = left_part.duplicate()
 		while new_left.size() < center_c:
@@ -1002,22 +1014,22 @@ func _collapse_horizontal_expand() -> void:
 		new_right.append_array(right_part)
 
 		for c in range(center_c):
-			board[r][c] = new_left[c]
+			target_board[r][c] = new_left[c]
 		for c in range(center_c, get_cols()):
-			board[r][c] = new_right[c - center_c]
+			target_board[r][c] = new_right[c - center_c]
 
 
-func _collapse_vertical_expand() -> void:
+func _collapse_vertical_expand(target_board: Array) -> void:
 	var center_r: int = int(get_rows() / 2.0)
 	for c in range(get_cols()):
 		var top_part: Array[int] = []
 		var bottom_part: Array[int] = []
 		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				top_part.append(target_board[r][c])
 		for r in range(center_r, get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				bottom_part.append(target_board[r][c])
 
 		var new_top: Array[int] = top_part.duplicate()
 		while new_top.size() < center_r:
@@ -1029,22 +1041,22 @@ func _collapse_vertical_expand() -> void:
 		new_bottom.append_array(bottom_part)
 
 		for r in range(center_r):
-			board[r][c] = new_top[r]
+			target_board[r][c] = new_top[r]
 		for r in range(center_r, get_rows()):
-			board[r][c] = new_bottom[r - center_r]
+			target_board[r][c] = new_bottom[r - center_r]
 
 
-func _collapse_horizontal_converge() -> void:
+func _collapse_horizontal_converge(target_board: Array) -> void:
 	var center_c: int = int(get_cols() / 2.0)
 	for r in range(get_rows()):
 		var left_part: Array[int] = []
 		var right_part: Array[int] = []
 		for c in range(center_c):
-			if board[r][c] != 0:
-				left_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				left_part.append(target_board[r][c])
 		for c in range(center_c, get_cols()):
-			if board[r][c] != 0:
-				right_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				right_part.append(target_board[r][c])
 
 		var new_left: Array[int] = []
 		for i in range(center_c - left_part.size()):
@@ -1056,22 +1068,22 @@ func _collapse_horizontal_converge() -> void:
 			new_right.append(0)
 
 		for c in range(center_c):
-			board[r][c] = new_left[c]
+			target_board[r][c] = new_left[c]
 		for c in range(center_c, get_cols()):
-			board[r][c] = new_right[c - center_c]
+			target_board[r][c] = new_right[c - center_c]
 
 
-func _collapse_vertical_converge() -> void:
+func _collapse_vertical_converge(target_board: Array) -> void:
 	var center_r: int = int(get_rows() / 2.0)
 	for c in range(get_cols()):
 		var top_part: Array[int] = []
 		var bottom_part: Array[int] = []
 		for r in range(center_r):
-			if board[r][c] != 0:
-				top_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				top_part.append(target_board[r][c])
 		for r in range(center_r, get_rows()):
-			if board[r][c] != 0:
-				bottom_part.append(board[r][c])
+			if target_board[r][c] != 0:
+				bottom_part.append(target_board[r][c])
 
 		var new_top: Array[int] = []
 		for i in range(center_r - top_part.size()):
@@ -1083,57 +1095,57 @@ func _collapse_vertical_converge() -> void:
 			new_bottom.append(0)
 
 		for r in range(center_r):
-			board[r][c] = new_top[r]
+			target_board[r][c] = new_top[r]
 		for r in range(center_r, get_rows()):
-			board[r][c] = new_bottom[r - center_r]
+			target_board[r][c] = new_bottom[r - center_r]
 
 
-func _collapse_quadrant_spread() -> void:
+func _collapse_quadrant_spread(target_board: Array) -> void:
 	var center_r: int = int(get_rows() / 2.0)
 	var center_c: int = int(get_cols() / 2.0)
 
 	for c in range(center_c, get_cols()):
 		var part: Array[int] = []
 		for r in range(center_r):
-			if board[r][c] != 0:
-				part.append(board[r][c])
+			if target_board[r][c] != 0:
+				part.append(target_board[r][c])
 		var new_part: Array[int] = []
 		for i in range(center_r - part.size()):
 			new_part.append(0)
 		new_part.append_array(part)
 		for r in range(center_r):
-			board[r][c] = new_part[r]
+			target_board[r][c] = new_part[r]
 
 	for c in range(center_c):
 		var part: Array[int] = []
 		for r in range(center_r):
-			if board[r][c] != 0:
-				part.append(board[r][c])
+			if target_board[r][c] != 0:
+				part.append(target_board[r][c])
 		var new_part: Array[int] = part.duplicate()
 		while new_part.size() < center_r:
 			new_part.append(0)
 		for r in range(center_r):
-			board[r][c] = new_part[r]
+			target_board[r][c] = new_part[r]
 
 	for r in range(center_r, get_rows()):
 		var part: Array[int] = []
 		for c in range(center_c):
-			if board[r][c] != 0:
-				part.append(board[r][c])
+			if target_board[r][c] != 0:
+				part.append(target_board[r][c])
 		var new_part: Array[int] = part.duplicate()
 		while new_part.size() < center_c:
 			new_part.append(0)
 		for c in range(center_c):
-			board[r][c] = new_part[c]
+			target_board[r][c] = new_part[c]
 
 	for r in range(center_r, get_rows()):
 		var part: Array[int] = []
 		for c in range(center_c, get_cols()):
-			if board[r][c] != 0:
-				part.append(board[r][c])
+			if target_board[r][c] != 0:
+				part.append(target_board[r][c])
 		var new_part: Array[int] = []
 		for i in range((get_cols() - center_c) - part.size()):
 			new_part.append(0)
 		new_part.append_array(part)
 		for c in range(center_c, get_cols()):
-			board[r][c] = new_part[c - center_c]
+			target_board[r][c] = new_part[c - center_c]

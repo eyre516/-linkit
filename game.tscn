@@ -289,6 +289,21 @@ theme_override_styles/fill = SubResource("StyleBoxTexture_timer_fill")
 max_value = 60.0
 value = 60.0
 
+[node name="EndlessInfoLabel" type="RichTextLabel" parent="VBoxContainer/InfoBar/HBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_font_sizes/normal_font_size = 24
+theme_override_font_sizes/bold_font_size = 24
+bbcode_enabled = true
+text = "[color=#8C5C33]无尽模式：[/color][color=#264D61]初级 - 不变[/color]"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
 [node name="ComboLabel" type="RichTextLabel" parent="VBoxContainer/InfoBar/HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 40)
@@ -633,6 +648,7 @@ layout_mode = 2
 layout_mode = 2
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
+unique_name_in_owner = true
 
 [node name="MenuBarTab" type="PanelContainer" parent="CanvasLayer"]
 unique_name_in_owner = true
@@ -839,6 +855,36 @@ theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 30
 text = "点击任意位置或按任意键继续"
 horizontal_alignment = 1
+
+[node name="EndlessDifficultyPanel" type="VBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="DifficultyRow" type="HBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/EndlessDifficultyPanel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="EndlessDifficulty1" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/EndlessDifficultyPanel/DifficultyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "初级"
+
+[node name="EndlessDifficulty2" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/EndlessDifficultyPanel/DifficultyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "中级"
+
+[node name="EndlessDifficulty3" type="Button" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer/EndlessDifficultyPanel/DifficultyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "高级"
 
 [node name="LeaderboardPanel" type="VBoxContainer" parent="CanvasLayer/CustomDialog/CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
