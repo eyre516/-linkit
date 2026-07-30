@@ -3931,3 +3931,106 @@ cd assets/连连看例子
 - 静态检查无语法错误（本机未安装 Godot，无法运行场景）。
 - 建议在编辑器中重点验证第 4 关“向下坍塌”：消除后同一列的剩余图块应仅在该列内向下滑动，不应出现其他列/行的图块横穿棋盘。
 - 同时检查撤销/重做：撤销后棋盘应恢复到坍塌前状态，重做后恢复到坍塌后状态（动画不反向属于预期行为）。
+
+
+---
+
+## 2026-07-30 17:10
+
+**原因**：玩家反馈顶部菜单栏自动隐藏/显示时，棋盘会因为顶部高度变化而“变大/闪一下”，影响游玩体验。根本原因是在 `VBoxContainer` 中直接隐藏/显示 `MenuBar`/`InfoBar`/`Toolbar`，导致棋盘区域获得额外垂直空间并立即重新布局。
+
+**改动**：
+
+1. **`game.tscn` 结构改造**：
+   - 在 `VBoxContainer` 下新增 `TopUIContainer`（Control），固定 `custom_minimum_size.y = 160`，`size_flags_vertical = 0`。
+   - 在 `TopUIContainer` 内新增 `FullTopUI`（VBoxContainer），使用 anchor 充满整个 `TopUIContainer`。
+   - 将 `MenuBar`、`InfoBar`、`HBoxContainer`（工具栏）移入 `FullTopUI`。
+   - 将 `CompactTopBar` 移入 `TopUIContainer`，并改为 top-wide anchor（置顶、全宽、高度 48）。
+   - 更新所有相关节点路径与信号连接路径（`UndoButton`/`RedoButton`/`RestartButton` 的 `pressed` 连接）。
+
+2. **`game.gd` 逻辑调整**：
+   - 新增 `@onready` 引用：`top_ui_container: Control = %TopUIContainer`、`full_top_ui: VBoxContainer = %FullTopUI`。
+   - `_show_compact_ui()`：改为隐藏 `full_top_ui`，显示 `compact_top_bar`。
+   - `_show_full_ui()`：改为显示 `full_top_ui`，隐藏 `compact_top_bar`。
+   - `_is_mouse_over_menu()`：仅在 `full_top_ui.visible` 为 true 时才判定 `menu_bar` 的鼠标悬停，避免紧凑模式下误判。
+   - `_show_toast()`： toast 的顶部基准从“`info_bar` 或 `compact_top_bar`”统一改为 `top_ui_container`，确保 toast 位置在紧凑/完整 UI 切换时不变。
+
+**影响位置**：
+
+- `game.tscn`：
+  - 第 97–121 行：新增 `TopUIContainer`、`FullTopUI`，调整 `CompactTopBar` 的 parent 与 anchor。
+  - 第 175 行：`MenuBar` 的 parent 改为 `VBoxContainer/TopUIContainer/FullTopUI`。
+  - 第 253 行：`InfoBar` 的 parent 改为 `VBoxContainer/TopUIContainer/FullTopUI`。
+  - 第 339 行：工具栏 `HBoxContainer` 的 parent 改为 `VBoxContainer/TopUIContainer/FullTopUI`。
+  - 第 1291–1293 行：更新按钮信号连接路径。
+- `game.gd`：
+  - 第 161–166 行：新增 `top_ui_container` 与 `full_top_ui` 引用。
+  - 第 842 行：`_show_toast()` 使用 `top_ui_container` 计算顶部基准。
+  - 第 1207 行：`_is_mouse_over_menu()` 增加 `full_top_ui.visible` 判断。
+  - 第 1699–1715 行：`_show_compact_ui()` / `_show_full_ui()` 改为操作 `full_top_ui`。
+
+**验证**：
+
+- 静态检查无语法错误（本机未安装 Godot，无法运行场景）。
+- 建议在编辑器中运行：开局后等待 5 秒，观察完整顶部 UI 隐藏、紧凑条出现时棋盘是否完全保持原位、没有缩放或跳动。
+- 鼠标移到屏幕顶部恢复完整 UI，确认棋盘仍无位移。
+- 检查 toast（如无尽模式关卡提示）位置是否在顶部 UI 容器下方、棋盘上方居中显示。
+
+
+---
+
+## 2026-07-30 17:25
+
+**原因**：玩家反馈虽然固定顶部 UI 高度解决了闪烁，但希望菜单栏收起后棋盘**真正变大**、显示更清晰；要求把“突然变大”改成“平滑缓慢变大”，让变化可接受。
+
+**改动**：
+
+1. **`game.tscn` 保持 TopUIContainer/FullTopUI 结构，但允许高度变化**：
+   - `TopUIContainer` 的 `custom_minimum_size.y` 从固定 160 改为 148（与原完整三栏高度一致）。
+   - `TopUIContainer` 不再强行锁死高度，而是交由代码通过 Tween 在完整高度（148）与紧凑高度（48）之间动画。
+
+2. **`game.gd` 新增动画常量与状态**：
+   - 新增常量：`TOP_UI_FULL_HEIGHT = 148.0`、`TOP_UI_COMPACT_HEIGHT = 48.0`、`UI_TRANSITION_DURATION = 0.25`。
+   - 新增变量 `_ui_transition_tween: Tween`，用于管理当前正在进行的顶部 UI 过渡动画，避免状态切换时动画重叠。
+
+3. **`game.gd` `_show_compact_ui()` 平滑收起动画（第 1704–1728 行）**：
+   - 立即显示 `compact_top_bar` 并将其透明度设为 0。
+   - 创建并行的 Tween：
+	 - `TopUIContainer.custom_minimum_size` 从当前值过渡到 `TOP_UI_COMPACT_HEIGHT`；
+	 - `FullTopUI.modulate:a` 从 1 过渡到 0；
+	 - `CompactTopBar.modulate:a` 从 0 过渡到 1。
+   - 动画曲线使用 `TRANS_QUAD` + `EASE_IN_OUT`。
+   - 动画结束后隐藏 `FullTopUI` 并恢复其透明度。
+   - 增加状态守卫 `if _ui_hidden: return`，避免重复触发。
+
+4. **`game.gd` `_show_full_ui()` 平滑展开动画（第 1732–1755 行）**：
+   - 立即显示 `FullTopUI` 并将其透明度设为 0。
+   - 创建并行的 Tween：
+	 - `TopUIContainer.custom_minimum_size` 从当前值过渡到 `TOP_UI_FULL_HEIGHT`；
+	 - `FullTopUI.modulate:a` 从 0 过渡到 1；
+	 - `CompactTopBar.modulate:a` 从 1 过渡到 0。
+   - 动画结束后隐藏 `CompactTopBar` 并恢复其透明度。
+   - 增加状态守卫 `if not _ui_hidden: return`。
+
+5. **动画可被打断**：
+   - 在两个函数开头都会 `kill()` 旧的 `_ui_transition_tween` 并创建新的 Tween。
+   - 这意味着玩家在菜单收起过程中把鼠标移回顶部，会立即反向展开；移走则会再次收起，全程平滑。
+
+**影响位置**：
+
+- `game.gd`：
+  - 第 46–48 行：新增顶部 UI 高度与动画时长常量。
+  - 第 80 行：新增 `_ui_transition_tween`。
+  - 第 1704–1728 行：`_show_compact_ui()` 改为平滑动画。
+  - 第 1732–1755 行：`_show_full_ui()` 改为平滑动画。
+- `game.tscn`：
+  - 第 99 行：`TopUIContainer.custom_minimum_size.y` 由 160 调整为 148。
+
+**验证**：
+
+- 静态检查无语法错误（本机未安装 Godot，无法运行场景）。
+- 建议在编辑器中运行：
+  1. 开局等待 5 秒，观察完整顶部 UI 淡出、容器高度平滑收缩到 48、棋盘同步缓慢变大，不应再有一帧跳变。
+  2. 鼠标移到屏幕顶部，观察容器平滑展开回 148、完整 UI 淡入、棋盘缓慢缩小。
+  3. 在收起/展开动画中途快速移动鼠标，确认动画能反向平滑过渡，不会卡顿或错位。
+  4. 检查 toast 位置是否始终跟随 `TopUIContainer` 底部，动画过程中也无明显跳动。

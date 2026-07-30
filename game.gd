@@ -43,6 +43,9 @@ var chinese_font: FontFile = preload("res://assets/fonts/NotoSerifSC-Regular.otf
 const AUTO_HIDE_DELAY := 5.0          # 游戏开始后多久自动隐藏顶部 UI
 const TOP_TRIGGER_HEIGHT := 24.0      # 鼠标移到屏幕顶部多少像素内触发显示
 const TOP_HIDE_DELAY := 1.5           # 鼠标离开顶部后多久恢复紧凑 UI
+const TOP_UI_FULL_HEIGHT := 148.0     # 完整顶部 UI 容器高度
+const TOP_UI_COMPACT_HEIGHT := 48.0   # 紧凑顶部 UI 容器高度
+const UI_TRANSITION_DURATION := 0.25  # 顶部 UI 展开/收起动画时长（秒）
 
 # 加分反馈相关常量
 const SCHEME_1_FLOATING_TEXT_ENABLED := true  # 方案 1：消除位置飘字（可独立开关）
@@ -74,6 +77,7 @@ var _compact_timer_pulse_tween: Tween = null
 
 var _ui_hidden: bool = false
 var _top_leave_time: float = 0.0
+var _ui_transition_tween: Tween = null
 
 # 鼠标右键双击洗牌的判定窗口（秒），同时决定单次右键提示的延迟
 const RIGHT_CLICK_DOUBLE_INTERVAL := 0.25
@@ -162,6 +166,8 @@ var bgm_volume: float = 0.5
 @onready var info_bar: PanelContainer = %InfoBar
 @onready var toolbar: HBoxContainer = %HBoxContainer
 @onready var compact_top_bar: PanelContainer = %CompactTopBar
+@onready var top_ui_container: Control = %TopUIContainer
+@onready var full_top_ui: VBoxContainer = %FullTopUI
 @onready var ui_hide_timer: Timer = %UIHideTimer
 @onready var menu_bar_tab: PanelContainer = %MenuBarTab
 @onready var grid_container: GridContainer = %GridContainer
@@ -834,11 +840,10 @@ func _show_toast(message: String, duration: float = 2.5, font_size: int = 28) ->
 	toast.add_theme_color_override("font_outline_color", Color.BLACK)
 	toast.add_theme_constant_override("outline_size", 5)
 
-	# 水平居中，宽度固定；垂直放在顶部信息栏与棋盘之间的空闲区域中央
+	# 水平居中，宽度固定；垂直放在顶部 UI 容器与棋盘之间的空闲区域中央
 	var toast_width := 720.0
 	var toast_height := 80.0
-	var top_bar := compact_top_bar if compact_top_bar.visible else info_bar
-	var top_y := top_bar.global_position.y + top_bar.size.y
+	var top_y := top_ui_container.global_position.y + top_ui_container.size.y
 	var board_top_y := board_center.global_position.y
 	var gap_center := (top_y + board_top_y) / 2.0
 	var toast_y := clampf(gap_center - toast_height / 2.0, top_y + 8.0, board_top_y - toast_height - 8.0)
@@ -1202,8 +1207,8 @@ func _setup_menus() -> void:
 func _is_mouse_over_menu() -> bool:
 	var mouse_pos := get_global_mouse_position()
 
-	# 菜单栏区域
-	if menu_bar.get_global_rect().has_point(mouse_pos):
+	# 菜单栏区域（完整顶部 UI 显示时才判定）
+	if full_top_ui.visible and menu_bar.get_global_rect().has_point(mouse_pos):
 		return true
 
 	# 隐藏时露出的菜单栏小标签
@@ -1697,24 +1702,56 @@ func _update_ui_visibility(delta: float) -> void:
 
 # 切换到紧凑顶部 UI（只显示倒计时条、本关用时、分数）
 func _show_compact_ui() -> void:
+	if _ui_hidden:
+		return
 	_ui_hidden = true
 	_top_leave_time = 0.0
-	menu_bar.hide()
-	info_bar.hide()
-	toolbar.hide()
+
 	compact_top_bar.show()
+	compact_top_bar.modulate.a = 0.0
+
+	if _ui_transition_tween != null:
+		_ui_transition_tween.kill()
+	_ui_transition_tween = create_tween()
+	_ui_transition_tween.set_parallel(true)
+	_ui_transition_tween.set_trans(Tween.TRANS_QUAD)
+	_ui_transition_tween.set_ease(Tween.EASE_IN_OUT)
+	_ui_transition_tween.tween_property(top_ui_container, "custom_minimum_size", Vector2(0, TOP_UI_COMPACT_HEIGHT), UI_TRANSITION_DURATION)
+	_ui_transition_tween.tween_property(full_top_ui, "modulate:a", 0.0, UI_TRANSITION_DURATION)
+	_ui_transition_tween.tween_property(compact_top_bar, "modulate:a", 1.0, UI_TRANSITION_DURATION)
+	_ui_transition_tween.finished.connect(func() -> void:
+		full_top_ui.hide()
+		full_top_ui.modulate.a = 1.0
+	)
+
 	menu_bar_tab.show()
 	_update_compact_ui()
 
 
 # 恢复完整顶部 UI（菜单栏、信息栏、工具栏）
 func _show_full_ui() -> void:
+	if not _ui_hidden:
+		return
 	_ui_hidden = false
 	_top_leave_time = 0.0
-	menu_bar.show()
-	info_bar.show()
-	toolbar.show()
-	compact_top_bar.hide()
+
+	full_top_ui.show()
+	full_top_ui.modulate.a = 0.0
+
+	if _ui_transition_tween != null:
+		_ui_transition_tween.kill()
+	_ui_transition_tween = create_tween()
+	_ui_transition_tween.set_parallel(true)
+	_ui_transition_tween.set_trans(Tween.TRANS_QUAD)
+	_ui_transition_tween.set_ease(Tween.EASE_IN_OUT)
+	_ui_transition_tween.tween_property(top_ui_container, "custom_minimum_size", Vector2(0, TOP_UI_FULL_HEIGHT), UI_TRANSITION_DURATION)
+	_ui_transition_tween.tween_property(full_top_ui, "modulate:a", 1.0, UI_TRANSITION_DURATION)
+	_ui_transition_tween.tween_property(compact_top_bar, "modulate:a", 0.0, UI_TRANSITION_DURATION)
+	_ui_transition_tween.finished.connect(func() -> void:
+		compact_top_bar.hide()
+		compact_top_bar.modulate.a = 1.0
+	)
+
 	menu_bar_tab.hide()
 
 
